@@ -45,15 +45,25 @@ local function itemNodes(item, vertical: boolean)
     return nodes
   end
 
-  local severity = view.severity(window)
+  local now = view.now()
+  local severity = view.severity(window, now)
   if setting("show_ring", true) then
     local ring = theme.ring(window.usedPercent, theme.meterColor(provider, severity), "surface_variant")
     if ring then
       table.insert(nodes, ui.image({ path = ring, width = ICON_SIZE, height = ICON_SIZE, opacity = if dimmed then 0.6 else 1 }))
     end
   end
+  -- At the limit the percentage says nothing new; when you get it back does.
+  local exhausted = window.limitReached and window.resetsAt ~= nil and window.resetsAt > now
   if setting("show_value", true) then
-    local text = if vertical then tostring(math.floor(window.usedPercent + 0.5)) else view.percent(window)
+    local text
+    if exhausted then
+      text = time.duration(window.resetsAt - now)
+    elseif vertical then
+      text = tostring(math.floor(window.usedPercent + 0.5))
+    else
+      text = view.percent(window)
+    end
     table.insert(nodes, ui.label({
       text = text,
       color = view.textColor(severity),
@@ -61,9 +71,9 @@ local function itemNodes(item, vertical: boolean)
       opacity = if dimmed then 0.7 else 1,
     }))
   end
-  if setting("show_countdown", false) and window.resetsAt and not vertical then
+  if setting("show_countdown", false) and window.resetsAt and not vertical and not exhausted then
     table.insert(nodes, ui.label({
-      text = time.duration(window.resetsAt - view.now()),
+      text = time.duration(window.resetsAt - now),
       color = "on_surface_variant",
     }))
   end
@@ -77,8 +87,16 @@ local function tooltipRows(items)
     local provider, window = item.view, item.window
     local value
     if window then
-      local reset = view.resetsIn(window, now)
-      value = if reset then `{view.percent(window)} · {reset}` else view.percent(window)
+      local parts = { view.percent(window) }
+      local reset = view.resetsIn(window, now, true)
+      if reset then
+        table.insert(parts, reset)
+      end
+      local forecast = view.pace(window, now)
+      if forecast and window.usedPercent < 100 then
+        table.insert(parts, forecast)
+      end
+      value = table.concat(parts, " · ")
       if provider.stale then
         value ..= " · " .. noctalia.tr("bar.stale")
       end

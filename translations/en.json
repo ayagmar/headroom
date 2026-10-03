@@ -58,13 +58,14 @@
   "notify": {
     "body": "{window} is at {percent}%.",
     "body_reset": "{window} is at {percent}%. Resets in {reset}.",
+    "reset_body": "You have your headroom back: now at {percent}%.",
+    "reset_title": "{provider} {window} has reset",
     "title": "{provider} usage is running low"
   },
   "pace": {
     "exhausted": "Limit reached",
-    "on_track": "On pace",
-    "runs_out": "Runs out in {duration}",
-    "under": "{points} pts under pace"
+    "projected": "≈ {percent}% by reset",
+    "runs_out": "Runs out in {duration}"
   },
   "panel": {
     "cached": "cached",
@@ -74,6 +75,7 @@
     "fetching": "Fetching usage…",
     "not_connected": "{provider} · not connected",
     "not_refreshed": "Not refreshed yet",
+    "open_dashboard": "Open {provider} usage page",
     "refresh_tooltip": "Refresh now (R)",
     "refreshing": "Refreshing…",
     "refreshing_provider": "Refreshing…",
@@ -93,6 +95,7 @@
   },
   "reset": {
     "in": "Resets in {duration}",
+    "in_at": "Resets in {duration} · {clock}",
     "now": "Resetting now"
   },
   "settings": {
@@ -104,9 +107,21 @@
       "description": "Usage at or above this percentage is shown in the error color and triggers a notification.",
       "label": "Critical at (%)"
     },
+    "disabled_providers": {
+      "description": "Provider ids Headroom ignores entirely: never fetched, never shown. Available: claude, codex.",
+      "label": "Disabled providers"
+    },
     "notify": {
       "description": "Notify once per window when usage crosses the critical threshold.",
-      "label": "Notifications"
+      "label": "Low headroom notifications"
+    },
+    "notify_reset": {
+      "description": "Notify when a window that reached the critical threshold resets.",
+      "label": "Reset notifications"
+    },
+    "pace_colors": {
+      "description": "Use the warning color when a window is on course to run out well before it resets, even below the warning threshold.",
+      "label": "Forecast colors"
     },
     "provider": {
       "description": "Which providers this capsule shows. Auto shows only the one closest to its limit.",

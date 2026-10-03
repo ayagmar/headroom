@@ -173,6 +173,56 @@ t.group("service", function()
     t.eq(#host.notifications, 0)
   end)
 
+  t.test("notifies when a maxed-out window resets", function()
+    local host = env.host()
+    env.claudeCreds(host)
+    local json = host.globals.noctalia.json
+    local hot = json.decode(env.fixture("claude_usage.json"))
+    hot.limits[1].percent = 100
+    env.serve(host, { ["api.anthropic.com"] = json.encode(hot) })
+    local svc = env.start(host, "service.luau")
+    t.eq(#host.notifications, 1, "running-low notification")
+
+    local fresh = json.decode(env.fixture("claude_usage.json"))
+    fresh.limits[1].percent = 2
+    fresh.limits[1].resets_at = "2026-10-04T01:19:59.911287+00:00" -- next 5h cycle
+    env.serve(host, { ["api.anthropic.com"] = json.encode(fresh) })
+    host.clock += 300
+    svc.call("update")
+    t.eq(#host.notifications, 2)
+    t.eq(host.notifications[2].title, "Claude Session has reset")
+    t.eq(host.notifications[2].body, "You have your headroom back: now at 2%.")
+    env.noMissingKeys(t, host)
+  end)
+
+  t.test("timestamp jitter is not mistaken for a reset", function()
+    local host = env.host()
+    env.claudeCreds(host)
+    local json = host.globals.noctalia.json
+    local hot = json.decode(env.fixture("claude_usage.json"))
+    hot.limits[1].percent = 95
+    env.serve(host, { ["api.anthropic.com"] = json.encode(hot) })
+    local svc = env.start(host, "service.luau")
+    hot.limits[1].percent = 94
+    hot.limits[1].resets_at = "2026-10-03T20:20:00.100000+00:00"
+    env.serve(host, { ["api.anthropic.com"] = json.encode(hot) })
+    host.clock += 300
+    svc.call("update")
+    t.eq(#host.notifications, 1)
+  end)
+
+  t.test("disabled providers are neither fetched nor shown", function()
+    local host = signedInClaude()
+    env.codexAuth(host)
+    host.config.disabled_providers = { " Codex " }
+    env.start(host, "service.luau")
+    t.eq(#report(host).providers, 1)
+    t.eq(report(host).providers[1].id, "claude")
+    for _, req in host.requests do
+      t.ok(req.url:find("chatgpt.com", 1, true) == nil, "codex not fetched")
+    end
+  end)
+
   t.test("a crashing adapter is contained", function()
     local host = signedInClaude()
     env.codexAuth(host)

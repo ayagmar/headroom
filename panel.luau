@@ -16,6 +16,15 @@ local isOpen = false
 local lastRenderAt = 0
 
 local CARD_FILL = "surface_variant/0.45"
+
+-- The vendor's own usage page, one click from its card. xdg-open runs as an
+-- argv (no shell), and the URL is a constant from the provider's brand.
+local canOpenUrls = noctalia.commandExists("xdg-open")
+
+local function openUrl(url: string)
+  noctalia.runAsync({ "xdg-open", url })
+  panel.close()
+end
 local TRACK = "on_surface/0.10"
 
 -- ── Pieces ────────────────────────────────────────────────────────────────
@@ -39,9 +48,9 @@ local function caption(text: string, color: string?, extra)
 end
 
 local function windowRow(provider, window, now: number, dimmed: boolean)
-  local severity = view.severity(window)
+  local severity = view.severity(window, now)
   local paceText, paceColor, pace = view.pace(window, now)
-  local resets = view.resetsIn(window, now)
+  local resets = view.resetsIn(window, now, true)
 
   local children = {
     ui.row({ align = "center", gap = 8 }, {
@@ -119,7 +128,7 @@ local function notesBlock(notes)
         text = note.value,
         fontSize = 11,
         fontWeight = "medium",
-        color = if note.tone == "warn" then "tertiary" elseif note.tone == "muted" then "on_surface_variant" else "on_surface",
+        color = if note.tone == "warn" then theme.severityColor("warn") elseif note.tone == "muted" then "on_surface_variant" else "on_surface",
       }),
     }))
   end
@@ -135,13 +144,25 @@ local function providerCard(provider, now: number)
     subtitle = (if subtitle then subtitle .. " · " else "") .. noctalia.tr("panel.cached")
   end
 
-  local header = ui.row({ align = "center", gap = 10 }, {
+  local headerChildren = {
     logo(provider, 22),
     ui.column({ gap = 1, flexGrow = 1 }, {
       ui.label({ text = provider.name, fontSize = 14, fontWeight = "semibold", color = "on_surface" }),
       caption(subtitle or " ", nil, { visible = subtitle ~= nil }),
     }),
-  })
+  }
+  if provider.brand.dashboard and canOpenUrls then
+    table.insert(headerChildren, ui.button({
+      glyph = "external-link",
+      variant = "ghost",
+      controlSize = "sm",
+      tooltip = noctalia.tr("panel.open_dashboard", { provider = provider.name }),
+      onClick = function()
+        openUrl(provider.brand.dashboard)
+      end,
+    }))
+  end
+  local header = ui.row({ align = "center", gap = 10 }, headerChildren)
 
   local body = { header }
   local dimmed = provider.status == "error"

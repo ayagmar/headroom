@@ -71,6 +71,20 @@ end
 
 local lastRefreshAt: number? = nil
 
+-- Providers the user switched off: never fetched, never shown.
+local function isDisabled(id: string): boolean
+  local list = noctalia.getConfig("disabled_providers")
+  if type(list) ~= "table" then
+    return false
+  end
+  for _, entry in list do
+    if type(entry) == "string" and entry:lower():gsub("%s", "") == id then
+      return true
+    end
+  end
+  return false
+end
+
 local function intervalSeconds(): number
   return math.clamp(state.config("refresh_minutes", 5), 1, 120) * 60
 end
@@ -136,6 +150,9 @@ local function publish()
   local views = {}
   local refreshing = false
   for _, p in registry do
+    if isDisabled(p.id) then
+      continue
+    end
     local rt = runtimes[p.id]
     local busy = scheduler.isBusy(rt.schedule, now)
     refreshing = refreshing or busy
@@ -160,28 +177,47 @@ end
 
 -- ── Notifications ──────────────────────────────────────────────────────────
 
--- Warns once per window per reset cycle when usage crosses the critical
--- threshold. Keyed by resetsAt, so the next cycle can warn again.
-local function notifyCrossings(p, rt: Runtime, previous: model.Snapshot?)
-  if state.config("notify", true) ~= true or rt.snapshot == nil then
+-- Two kinds, each at most once per window per reset cycle:
+--   "running low"  usage crossed the critical threshold (keyed by resetsAt, so
+--                  the next cycle can warn again)
+--   "reset"        a window that had reached the critical threshold started a
+--                  new cycle: you have your headroom back
+local function notifyChanges(p, rt: Runtime, previous: model.Snapshot?)
+  if rt.snapshot == nil then
+    return
+  end
+  local warnLow = state.config("notify", true) == true
+  local warnReset = state.config("notify_reset", true) == true
+  if not warnLow and not warnReset then
     return
   end
   local _, critical = state.thresholds()
   local before = {}
   if previous then
     for _, w in previous.windows do
-      before[w.id] = w.usedPercent
+      before[w.id] = w
     end
   end
+  local now = ctx.now()
   for _, w in rt.snapshot.windows do
+    local old = before[w.id]
     local cycle = w.resetsAt or 0
-    local crossed = w.usedPercent >= critical and (before[w.id] or 0) < critical
-    if crossed and rt.notified[w.id] ~= cycle then
+    local crossed = w.usedPercent >= critical and (old == nil or old.usedPercent < critical)
+    if warnLow and crossed and rt.notified[w.id] ~= cycle then
       rt.notified[w.id] = cycle
       local body = if w.resetsAt
-        then noctalia.tr("notify.body_reset", { window = w.label, percent = math.floor(w.usedPercent), reset = time.duration(w.resetsAt - ctx.now()) })
+        then noctalia.tr("notify.body_reset", { window = w.label, percent = math.floor(w.usedPercent), reset = time.duration(w.resetsAt - now) })
         else noctalia.tr("notify.body", { window = w.label, percent = math.floor(w.usedPercent) })
       noctalia.notify(noctalia.tr("notify.title", { provider = p.name }), body)
+    end
+    -- Vendors jitter reset timestamps by fractions of a second; a new cycle
+    -- moves it by at least the window length, so a minute is a safe margin.
+    local newCycle = old ~= nil and old.resetsAt ~= nil and w.resetsAt ~= nil and w.resetsAt - old.resetsAt > 60
+    if warnReset and newCycle and old.usedPercent >= critical and w.usedPercent < old.usedPercent then
+      noctalia.notify(
+        noctalia.tr("notify.reset_title", { provider = p.name, window = w.label }),
+        noctalia.tr("notify.reset_body", { percent = math.floor(w.usedPercent) })
+      )
     end
   end
 end
@@ -213,7 +249,7 @@ local function fetchProvider(p, rt: Runtime, now: number)
       rt.snapshot = snapshot
       rt.error = nil
       rt.stale = false
-      notifyCrossings(p, rt, previous)
+      notifyChanges(p, rt, previous)
       saveCache()
     end
     publish()
@@ -231,6 +267,9 @@ local function tick()
   local now = ctx.now()
   local changed = false
   for _, p in registry do
+    if isDisabled(p.id) then
+      continue
+    end
     local rt = runtimes[p.id]
     local configured = p.isConfigured(ctx)
     if configured ~= rt.configured then

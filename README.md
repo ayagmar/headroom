@@ -22,23 +22,34 @@ Headroom reuses the sign-in your CLIs already have. It needs no API keys and ins
 
 Headroom detects each provider when its sign-in file is present. Providers that are not signed in stay out of the bar.
 
+`xdg-open` is optional. It is used only by the panel's "open usage page" buttons, which are hidden when it is not
+installed.
+
 ## Usage
 
 Add the **Headroom** widget to your bar from Settings → Bar. Each signed-in provider appears as its logo, a ring
-gauge and the usage of the window closest to its limit. The color turns to warning and then critical as usage grows.
+gauge and the usage of the window closest to its limit.
+
+- The color turns amber at the warning threshold and red at the critical threshold.
+- It also turns amber below the warning threshold when the window is on course to run out long before it resets.
+- When a window is maxed out, the bar shows how long until it comes back (for example `1h 15m`) instead of `100%`.
 
 - **Left click** opens the panel.
 - **Right click** refreshes now. The binding is `plugin ayagmar/headroom:poller all refresh`, and you can rebind it in
   the widget's settings.
-- **Hover** shows every displayed window with its usage and reset countdown.
+- **Hover** shows every displayed window with its usage, reset time and forecast.
 
 The panel shows one card per provider, with every window (for example Session, Weekly, or Weekly · Opus) as a usage
 meter.
 
 - A thin time track under each meter shows how much of the window has passed. If the meter is ahead of the track,
   you are using the window faster than it allows.
-- The pace line reads either **Runs out in 48m** (shown when you will hit the limit before the reset), **On pace**, or
-  **N pts under pace**.
+- Each window shows when it resets, as a countdown plus the clock time in your shell's time format
+  (`Resets in 3h 27m · 20:19`, or `Sat 07:59` for weekly windows).
+- The forecast extrapolates your usage so far:
+  - **≈ 59% by reset** when the window will last.
+  - **Runs out in 26m** when it won't. This is highlighted when the lockout before the reset is significant.
+- The link button on each card opens the provider's usage page in your browser.
 - Extra usage and credits appear under the windows when your plan has them.
 - If something goes wrong (expired session, rejected sign-in, offline), the card shows what happened and how to fix
   it. It keeps the last known numbers, marked as cached.
@@ -58,7 +69,10 @@ Plugin settings (Settings → Plugins → Headroom):
 | `warn_percent` | `int` | `70` | Usage at or above this percentage uses the warning color. |
 | `critical_percent` | `int` | `90` | Usage at or above this percentage uses the error color and triggers a notification. |
 | `notify` | `bool` | `true` | Sends one notification per window per reset cycle when usage crosses `critical_percent`. |
+| `notify_reset` | `bool` | `true` | Sends a notification when a window that reached `critical_percent` resets, so you know your headroom is back. |
+| `pace_colors` | `bool` | `true` | Uses the warning color when a window is on course to be locked out for at least 10% of its length before it resets. |
 | `brand_colors` | `bool` | `true` | Colors healthy meters with each provider's brand color. Turn it off to use the theme's primary color. |
+| `disabled_providers` | `string_list` | `[]` | Advanced. Provider ids to ignore entirely (`claude`, `codex`). A listed provider is never fetched and never shown. |
 
 Widget settings (per bar capsule):
 
@@ -92,7 +106,8 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
 - **Files written.** Everything goes in the plugin data directory (`~/.local/state/noctalia/plugins/data/ayagmar/headroom/`):
   - `cache.json`: the last usage numbers, so the bar has data right after login. It contains no credentials.
   - `icons/` and `rings/`: small theme-tinted SVGs.
-- **No processes are spawned.**
+- **Processes.** Headroom spawns only `xdg-open <usage page URL>`, and only when you click a card's link button.
+  The URL is a constant from the provider adapter, passed as an argument with no shell involved.
 - **These endpoints are undocumented.** Vendors can change them at any time. If a provider's card shows
   *Unexpected response*, please open an issue.
 - **Trademarks.** Claude and Anthropic are trademarks of Anthropic. OpenAI and Codex are trademarks of OpenAI. The

@@ -58,27 +58,37 @@ t.group("pace", function()
     return model.window({ id = "s", usedPercent = used, periodSeconds = H5, resetsAt = now + remaining })
   end
 
-  t.test("projects exhaustion when burning fast", function()
+  t.test("projects exhaustion and the lockout it costs", function()
     local p = pace.compute(window(80, H5 / 2), now)
     t.eq(p.status, "runs_out")
     t.near(p.elapsedFraction, 0.5, 1e-9)
-    -- 80% in 9000s -> 20% left takes 2250s.
+    -- 80% in 9000s -> the last 20% takes 2250s, leaving 6750s locked out.
     t.near(p.runsOutIn, 2250, 1e-6)
+    t.near(p.lockoutSeconds, 6750, 1e-6)
+    t.eq(p.severity, "warn")
   end)
 
-  t.test("on track within tolerance, under when well below", function()
-    t.eq(pace.compute(window(55, H5 / 2), now).status, "on_track")
-    local under = pace.compute(window(20, H5 / 2), now)
-    t.eq(under.status, "under")
-    t.near(under.delta, -30, 1e-9)
+  t.test("running out just before the reset is not a warning", function()
+    local p = pace.compute(window(52, H5 / 2), now)
+    t.eq(p.status, "runs_out")
+    t.eq(p.severity, "ok")
+  end)
+
+  t.test("projects usage at reset when it will last", function()
+    local p = pace.compute(window(20, H5 / 2), now)
+    t.eq(p.status, "projected")
+    t.near(p.projectedPercent, 40, 1e-9)
+    t.eq(p.severity, "ok")
   end)
 
   t.test("no verdict early in a window", function()
-    t.eq(pace.compute(window(30, H5 - 300), now).status, "on_track")
+    t.eq(pace.compute(window(30, H5 - 300), now).status, "early")
   end)
 
   t.test("exhausted at the limit", function()
-    t.eq(pace.compute(window(100, 600), now).status, "exhausted")
+    local p = pace.compute(window(100, 600), now)
+    t.eq(p.status, "exhausted")
+    t.eq(p.severity, "critical")
   end)
 
   t.test("nil without period or reset", function()

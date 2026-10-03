@@ -32,7 +32,7 @@ and lets the tests run adapters against recorded responses.
 
 1. **Create `providers/<id>/init.luau`** and return `provider.define{...}` with these fields:
    - `id`, `name`
-   - `brand = { logo, tint, accent, glyph }`
+   - `brand = { logo, tint, accent, glyph, dashboard? }`
    - `isConfigured(ctx)`: a cheap local check, run on every tick.
    - `fetch(ctx, done)`: calls `done(snapshot)` or `done(nil, model.err(code))` exactly once.
    - `signInHint(ctx)`: a one-line recovery instruction.
@@ -69,7 +69,9 @@ noctalia msg plugins enable ayagmar/headroom
 noctalia msg panel-toggle ayagmar/headroom:panel
 ```
 
-`.luau` edits hot-reload. Manifest edits need `noctalia msg config-reload`. Logs are in `~/.cache/noctalia/noctalia.log`
+`.luau` edits hot-reload. For edits to `plugin.toml` or `translations/en.json`, run
+`noctalia msg plugins disable ayagmar/headroom && noctalia msg plugins enable ayagmar/headroom`
+(`config-reload` alone does not re-read them). Logs are in `~/.cache/noctalia/noctalia.log`
 (`grep headroom`).
 
 ```sh

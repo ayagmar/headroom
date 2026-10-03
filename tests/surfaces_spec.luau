@@ -84,6 +84,34 @@ t.group("bar", function()
     t.eq(host.tooltip, "Headroom: no Claude or Codex sign-in found")
   end)
 
+  t.test("forecast raises the color before the threshold", function()
+    -- Session at 60% with 4h of 5h left: on course to be locked out for hours.
+    local host = running({ claudeSession = 60, config = { provider = "claude", window = "session" } })
+    host.clock = 1791058799 - 3 * 3600 -- 2h elapsed, 60% used -> runs out after 1h20m more, 1h40m locked out
+    env.start(host, "bar.luau")
+    local label = env.find(host.barTree, function(n) return n.type == "label" end)[1]
+    t.eq(label.props.text, "60%")
+    t.eq(label.props.color, "#f2b84b")
+    t.ok(host.tooltip[1].value:find("Runs out in 1h 20m", 1, true) ~= nil, host.tooltip[1].value)
+  end)
+
+  t.test("forecast colors can be turned off", function()
+    local host = running({ claudeSession = 60, config = { provider = "claude", window = "session", pace_colors = false } })
+    host.clock = 1791058799 - 3 * 3600
+    env.start(host, "bar.luau")
+    local label = env.find(host.barTree, function(n) return n.type == "label" end)[1]
+    t.eq(label.props.color, "on_surface")
+  end)
+
+  t.test("a maxed-out window shows when it comes back", function()
+    local host = running({ claudeSession = 100, config = { provider = "claude", window = "session" } })
+    host.clock = 1791058799 - 4500
+    env.start(host, "bar.luau")
+    local label = env.find(host.barTree, function(n) return n.type == "label" end)[1]
+    t.eq(label.props.text, "1h 15m")
+    t.eq(label.props.color, "error")
+  end)
+
   t.test("left click opens the panel", function()
     local host = running()
     local bar = env.start(host, "bar.luau")
@@ -129,8 +157,9 @@ t.group("panel", function()
     local panel = env.start(host, "panel.luau")
     panel.call("onOpen", "")
     local texts = env.texts(host.panelTree)
-    t.contains(texts, "On pace")
-    t.contains(texts, "Resets in 2h 30m")
+    -- 51% at the halfway mark runs out 2% before the reset: worth saying, not alarming.
+    t.contains(texts, "Runs out in 2h 24m")
+    t.contains(texts, "Resets in 2h 30m · 19:40")
   end)
 
   t.test("error banner explains how to recover", function()
@@ -158,6 +187,37 @@ t.group("panel", function()
     local panel = env.start(host, "panel.luau")
     panel.call("onOpen", "")
     t.contains(env.texts(host.panelTree), "No AI subscriptions found")
+    env.noMissingKeys(t, host)
+  end)
+
+  t.test("each card links to the vendor's usage page", function()
+    local host = running()
+    local panel = env.start(host, "panel.luau")
+    panel.call("onOpen", "")
+    local buttons = env.find(host.panelTree, function(n) return n.type == "button" and n.props.glyph == "external-link" end)
+    t.eq(#buttons, 2)
+    t.eq(buttons[1].props.tooltip, "Open Claude usage page")
+    buttons[1].props.onClick()
+    t.eq(host.spawned[1][1], "xdg-open")
+    t.eq(host.spawned[1][2], "https://claude.ai/settings/usage")
+  end)
+
+  t.test("no usage-page buttons without xdg-open", function()
+    local host = running()
+    host.commands["xdg-open"] = nil
+    local panel = env.start(host, "panel.luau")
+    panel.call("onOpen", "")
+    t.eq(#env.find(host.panelTree, function(n) return n.props.glyph == "external-link" end), 0)
+  end)
+
+  t.test("projection and weekday reset for long windows", function()
+    local host = running()
+    host.clock = 1791100799 - 2 * 86400 -- weekly: 5 of 7 days elapsed
+    local panel = env.start(host, "panel.luau")
+    panel.call("onOpen", "")
+    local texts = env.texts(host.panelTree)
+    t.contains(texts, "Resets in 2d · Sun 07:59")
+    t.contains(texts, "≈ 22% by reset") -- Fable: 16% after 5/7 of the week
     env.noMissingKeys(t, host)
   end)
 

@@ -20,16 +20,28 @@ local FALLBACK_HEX = {
   error = "#F2B8B5",
 }
 
--- Severity -> palette role. "ok" uses the provider accent instead.
-M.SEVERITY_ROLE = {
-  warn = "tertiary",
-  critical = "error",
-}
+-- Material palettes have an error role but no warning role, and `tertiary`
+-- is often blue or pink, which does not read as "careful". So warning is a
+-- fixed amber, tuned for contrast against dark and light surfaces.
+local WARN_DARK = "#f2b84b"
+local WARN_LIGHT = "#a86400"
+
+-- Color for a severity, or nil for "ok" (callers use the provider accent or
+-- the default text color).
+function M.severityColor(severity: string): string?
+  if severity == "critical" then
+    return "error"
+  elseif severity == "warn" then
+    return if noctalia.isDarkMode and not noctalia.isDarkMode() then WARN_LIGHT else WARN_DARK
+  end
+  return nil
+end
 
 function M.hex(colorOrRole: string): string
   if colorOrRole:sub(1, 1) == "#" then
     return colorOrRole:lower()
   end
+  colorOrRole = colorOrRole:gsub("/.*$", "") -- "primary/0.6" -> "primary" (SVG gets the solid color)
   local resolved = noctalia.getColor and noctalia.getColor(colorOrRole)
   return (resolved or FALLBACK_HEX[colorOrRole] or "#888888"):lower()
 end
@@ -37,9 +49,9 @@ end
 -- The meter color for a provider at a given severity (role or hex string;
 -- both are valid UiColor values).
 function M.meterColor(provider, severity: string): string
-  local role = M.SEVERITY_ROLE[severity]
-  if role then
-    return role
+  local color = M.severityColor(severity)
+  if color then
+    return color
   end
   local useBrand = noctalia.getConfig("brand_colors")
   if useBrand == false then

@@ -18,7 +18,7 @@ license = "MIT"
 icon = "gauge"
 description = "Claude and Codex subscription limits in your bar: usage, reset countdowns and pace, with a detailed panel."
 tags = ["bar", "panel", "service", "ai", "indicator", "productivity"]
-dependencies = []
+dependencies = ["xdg-open"]
 
 # ── Plugin-level settings (shared by the service, every capsule and the panel) ──
 
@@ -57,11 +57,33 @@ description_key = "settings.notify.description"
 default = true
 
 [[setting]]
+key = "notify_reset"
+type = "bool"
+label_key = "settings.notify_reset.label"
+description_key = "settings.notify_reset.description"
+default = true
+
+[[setting]]
+key = "pace_colors"
+type = "bool"
+label_key = "settings.pace_colors.label"
+description_key = "settings.pace_colors.description"
+default = true
+
+[[setting]]
 key = "brand_colors"
 type = "bool"
 label_key = "settings.brand_colors.label"
 description_key = "settings.brand_colors.description"
 default = true
+
+[[setting]]
+key = "disabled_providers"
+type = "string_list"
+label_key = "settings.disabled_providers.label"
+description_key = "settings.disabled_providers.description"
+default = []
+advanced = true
 
 # ── Entries ─────────────────────────────────────────────────────────────────
 
@@ -134,7 +156,7 @@ entry = "bar.luau"
 id = "panel"
 entry = "panel.luau"
 width = 420
-height = 680
+height = 640
 placement = "attached"
 position = "auto"
 open_near_click = true

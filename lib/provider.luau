@@ -31,6 +31,7 @@ export type Brand = {
   tint: string, -- logo color: "#rrggbb" or a palette role ("on_surface")
   accent: string, -- meter color while usage is healthy: "#rrggbb" or a role
   glyph: string, -- Tabler glyph fallback where an image cannot be used
+  dashboard: string?, -- the vendor's usage page, opened from the panel card
 }
 
 export type Provider = {

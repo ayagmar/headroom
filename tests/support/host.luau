@@ -36,6 +36,8 @@ function M.new(sources)
     watchers = {},
     updateInterval = nil,
     toggledPanels = {},
+    commands = { ["xdg-open"] = true },
+    spawned = {},
     vertical = false,
     barTree = nil,
     tooltip = nil,
@@ -135,6 +137,30 @@ function M.new(sources)
       table.insert(host.toggledPanels, id)
     end,
     openSettings = function() end,
+    commandExists = function(name)
+      return host.commands[name] == true
+    end,
+    runAsync = function(argv)
+      table.insert(host.spawned, argv)
+      return true
+    end,
+    timeFormat = function()
+      return "{:%H:%M}"
+    end,
+    -- UTC, enough of strftime for the patterns the plugin uses.
+    formatTime = function(pattern, unix)
+      unix = unix or host.clock
+      local days = unix // 86400
+      local secs = unix % 86400
+      local weekdays = { "Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed" }
+      pattern = pattern:gsub("^{:(.*)}$", "%1")
+      return (pattern:gsub("%%(%a)", function(c)
+        if c == "H" then return string.format("%02d", secs // 3600) end
+        if c == "M" then return string.format("%02d", secs % 3600 // 60) end
+        if c == "a" then return weekdays[days % 7 + 1] end
+        return "%" .. c
+      end))
+    end,
     json = {
       decode = json.decode,
       encode = function(value)

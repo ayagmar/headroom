@@ -145,6 +145,7 @@ return provider.define({
     tint = "on_surface",
     accent = "#10A37F",
     glyph = "brand-openai",
+    dashboard = "https://chatgpt.com/codex/settings/usage",
   },
 
   isConfigured = function(ctx)

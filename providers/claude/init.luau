@@ -193,6 +193,7 @@ return provider.define({
     tint = "#D97757",
     accent = "#D97757",
     glyph = "sparkles",
+    dashboard = "https://claude.ai/settings/usage",
   },
 
   isConfigured = function(ctx)
