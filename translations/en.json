@@ -1,0 +1,158 @@
+{
+  "ago": {
+    "d": "{d}d ago",
+    "h": "{h}h ago",
+    "m": "{m}m ago",
+    "now": "just now"
+  },
+  "bar": {
+    "empty": "Headroom: no Claude or Codex sign-in found",
+    "loading": "Fetching usage…",
+    "stale": "cached"
+  },
+  "duration": {
+    "d": "{d}d",
+    "dh": "{d}d {h}h",
+    "h": "{h}h",
+    "hm": "{h}h {m}m",
+    "lt_minute": "<1m",
+    "m": "{m}m"
+  },
+  "error": {
+    "auth": {
+      "body": "The provider rejected the saved sign-in.",
+      "title": "Sign-in rejected"
+    },
+    "expired": {
+      "body": "The saved session has expired.",
+      "title": "Session expired"
+    },
+    "network": {
+      "body": "Check your connection. Headroom retries automatically.",
+      "title": "Can't reach the provider"
+    },
+    "not_configured": {
+      "body": "No sign-in found.",
+      "title": "Not signed in"
+    },
+    "parse": {
+      "body": "The usage format may have changed. Please report this.",
+      "title": "Unexpected response"
+    },
+    "rate_limited": {
+      "body": "The usage endpoint asked us to slow down. Headroom retries automatically.",
+      "title": "Throttled"
+    },
+    "server": {
+      "body": "The provider had a problem. Headroom retries automatically.",
+      "title": "Service error"
+    }
+  },
+  "note": {
+    "credits": "Credits",
+    "extra_usage": "Extra usage",
+    "of": "{used} of {limit}",
+    "on": "On",
+    "unlimited": "Unlimited"
+  },
+  "notify": {
+    "body": "{window} is at {percent}%.",
+    "body_reset": "{window} is at {percent}%. Resets in {reset}.",
+    "title": "{provider} usage is running low"
+  },
+  "pace": {
+    "exhausted": "Limit reached",
+    "on_track": "On pace",
+    "runs_out": "Runs out in {duration}",
+    "under": "{points} pts under pace"
+  },
+  "panel": {
+    "cached": "cached",
+    "elapsed_tooltip": "{percent}% of this window has elapsed",
+    "empty_body": "Headroom reads the sign-ins of Claude Code and the Codex CLI. Sign in to either and it shows up here automatically.",
+    "empty_title": "No AI subscriptions found",
+    "fetching": "Fetching usage…",
+    "not_connected": "{provider} · not connected",
+    "not_refreshed": "Not refreshed yet",
+    "refresh_tooltip": "Refresh now (R)",
+    "refreshing": "Refreshing…",
+    "refreshing_provider": "Refreshing…",
+    "retry": "Retry",
+    "settings_tooltip": "Settings",
+    "showing_cached": "Showing data from {ago}.",
+    "starting": "Starting…",
+    "updated": "Updated {ago}"
+  },
+  "providers": {
+    "claude": {
+      "hint": "Run `claude` once to sign in or renew the session."
+    },
+    "codex": {
+      "hint": "Run `codex login` and sign in with ChatGPT."
+    }
+  },
+  "reset": {
+    "in": "Resets in {duration}",
+    "now": "Resetting now"
+  },
+  "settings": {
+    "brand_colors": {
+      "description": "Color healthy meters with each provider's brand color instead of the theme's primary color.",
+      "label": "Brand colors"
+    },
+    "critical_percent": {
+      "description": "Usage at or above this percentage is shown in the error color and triggers a notification.",
+      "label": "Critical at (%)"
+    },
+    "notify": {
+      "description": "Notify once per window when usage crosses the critical threshold.",
+      "label": "Notifications"
+    },
+    "provider": {
+      "description": "Which providers this capsule shows. Auto shows only the one closest to its limit.",
+      "label": "Providers",
+      "option": {
+        "all": "All signed-in providers",
+        "auto": "Auto (closest to limit)",
+        "claude": "Claude",
+        "codex": "Codex"
+      }
+    },
+    "refresh_minutes": {
+      "description": "How often to fetch usage from each provider, in minutes. Failures retry sooner with backoff.",
+      "label": "Refresh interval (min)"
+    },
+    "show_countdown": {
+      "description": "Show the time until the displayed window resets next to the percentage (horizontal bars only).",
+      "label": "Show reset countdown"
+    },
+    "show_logo": {
+      "label": "Show provider logo"
+    },
+    "show_ring": {
+      "label": "Show ring gauge"
+    },
+    "show_value": {
+      "label": "Show percentage"
+    },
+    "warn_percent": {
+      "description": "Usage at or above this percentage is shown in the warning color.",
+      "label": "Warning at (%)"
+    },
+    "window": {
+      "description": "Which usage window the capsule shows for each provider.",
+      "label": "Window",
+      "option": {
+        "session": "Session (5-hour)",
+        "tightest": "Closest to limit",
+        "weekly": "Weekly"
+      }
+    }
+  },
+  "window": {
+    "code_review": "Code review",
+    "session": "Session",
+    "weekly": "Weekly",
+    "weekly_model": "Weekly · {model}"
+  }
+}

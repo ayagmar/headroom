@@ -1,0 +1,48 @@
+--!nonstrict
+-- The contract between the service (the only entry that fetches) and the
+-- presentation entries (bar, panel). Each entry runs in its own Luau VM, so
+-- they share data exclusively through these noctalia.state keys.
+
+local M = {}
+
+M.PANEL_ID = "ayagmar/headroom:panel"
+M.PLUGIN_ID = "ayagmar/headroom"
+M.VERSION = "0.1.0"
+
+-- Published by the service:
+--   {
+--     refreshing: boolean,
+--     lastRefreshAt: number?,      Unix seconds of the last completed cycle
+--     providers: { ProviderView }, registry order
+--   }
+-- ProviderView:
+--   { id, name, brand, configured: boolean,
+--     status: "loading" | "ok" | "error" | "absent",
+--     snapshot: Snapshot?,         last good data, kept through errors
+--     error: ProviderError?,       current failure, with `hint` filled in
+--     stale: boolean }             snapshot came from the on-disk cache or predates an error
+M.REPORT = "report"
+
+-- Written by bar/panel, watched by the service: { action = "refresh", at = ms }.
+M.COMMAND = "command"
+
+function M.requestRefresh()
+  noctalia.state.set(M.COMMAND, { action = "refresh", at = noctalia.nowMs() })
+end
+
+-- Reads a config value with a fallback for unset or mistyped values.
+function M.config(key: string, fallback: any): any
+  local value = noctalia.getConfig(key)
+  if value == nil or type(value) ~= type(fallback) then
+    return fallback
+  end
+  return value
+end
+
+function M.thresholds(): (number, number)
+  local warn = M.config("warn_percent", 70)
+  local critical = M.config("critical_percent", 90)
+  return math.min(warn, critical), critical
+end
+
+return M

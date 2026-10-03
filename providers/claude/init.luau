@@ -1,0 +1,226 @@
+--!nonstrict
+-- Claude (Pro / Max / Team / Enterprise subscriptions, as used by Claude Code).
+--
+-- Credentials: the OAuth session Claude Code stores in
+--   $CLAUDE_CONFIG_DIR/.credentials.json   (default ~/.claude/.credentials.json)
+-- read-only. Headroom never refreshes or rewrites the token: refresh tokens
+-- rotate, and spending one here would sign Claude Code out. When the access
+-- token has expired we say so and Claude Code renews it on its next run.
+--
+-- Endpoint: GET https://api.anthropic.com/api/oauth/usage, the one Claude Code's
+-- own /usage screen reads. It is not a documented public API, so parsing is
+-- defensive: the newer `limits` array is preferred and the older
+-- five_hour / seven_day fields are the fallback.
+
+local provider = require("../../lib/provider.luau")
+local model = require("../../lib/model.luau")
+local time = require("../../lib/time.luau")
+
+local E = model.ErrorCode
+
+local USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+local SESSION_SECONDS = 5 * 3600
+local WEEK_SECONDS = 7 * 86400
+
+local PLAN_NAMES = {
+  pro = "Pro",
+  max = "Max",
+  team = "Team",
+  enterprise = "Enterprise",
+  free = "Free",
+}
+
+local function credentialsPath(ctx): string
+  local dir = ctx.env("CLAUDE_CONFIG_DIR")
+  if dir ~= nil and dir ~= "" then
+    return `{dir}/.credentials.json`
+  end
+  return ctx.expandPath("~/.claude/.credentials.json")
+end
+
+local function planLabel(oauth): string?
+  local sub = oauth.subscriptionType
+  if type(sub) ~= "string" or sub == "" then
+    return nil
+  end
+  local name = PLAN_NAMES[sub] or (sub:sub(1, 1):upper() .. sub:sub(2))
+  local multiplier = type(oauth.rateLimitTier) == "string" and oauth.rateLimitTier:match("max_(%d+)x")
+  if multiplier then
+    return `{name} {multiplier}x`
+  end
+  return name
+end
+
+-- "seven_day_oauth_apps" -> "Seven day oauth apps"
+local function humanize(key: string): string
+  local text = key:gsub("_", " ")
+  return text:sub(1, 1):upper() .. text:sub(2)
+end
+
+local function fromLimits(limits, ctx): { model.Window }
+  local windows = {}
+  for _, limit in limits do
+    if type(limit) ~= "table" or limit.percent == nil then
+      continue
+    end
+    local resetsAt = time.parseIso8601(limit.resets_at)
+    local period = if limit.group == "session" then SESSION_SECONDS
+      elseif limit.group == "weekly" then WEEK_SECONDS
+      else nil
+
+    local scope = type(limit.scope) == "table" and limit.scope or nil
+    local modelName = scope and type(scope.model) == "table" and scope.model.display_name or nil
+
+    if limit.kind == "session" then
+      table.insert(windows, model.window({
+        id = "session", kind = "session", label = ctx.tr("window.session"),
+        usedPercent = limit.percent, resetsAt = resetsAt, periodSeconds = SESSION_SECONDS,
+      }))
+    elseif limit.kind == "weekly_all" then
+      table.insert(windows, model.window({
+        id = "weekly", kind = "weekly", label = ctx.tr("window.weekly"),
+        usedPercent = limit.percent, resetsAt = resetsAt, periodSeconds = WEEK_SECONDS,
+      }))
+    elseif modelName ~= nil then
+      table.insert(windows, model.window({
+        id = `{limit.kind}:{modelName}`, kind = "model",
+        label = ctx.tr("window.weekly_model", { model = modelName }),
+        usedPercent = limit.percent, resetsAt = resetsAt, periodSeconds = period,
+      }))
+    else
+      table.insert(windows, model.window({
+        id = tostring(limit.kind), kind = "other", label = humanize(tostring(limit.kind)),
+        usedPercent = limit.percent, resetsAt = resetsAt, periodSeconds = period,
+      }))
+    end
+  end
+  return windows
+end
+
+-- Older response shape: one object per window with `utilization` (0..100).
+local LEGACY = {
+  { key = "five_hour", id = "session", kind = "session", period = SESSION_SECONDS },
+  { key = "seven_day", id = "weekly", kind = "weekly", period = WEEK_SECONDS },
+  { key = "seven_day_opus", id = "weekly:Opus", kind = "model", period = WEEK_SECONDS, model = "Opus" },
+  { key = "seven_day_sonnet", id = "weekly:Sonnet", kind = "model", period = WEEK_SECONDS, model = "Sonnet" },
+}
+
+local function fromLegacy(data, ctx): { model.Window }
+  local windows = {}
+  for _, spec in LEGACY do
+    local entry = data[spec.key]
+    if type(entry) == "table" and entry.utilization ~= nil then
+      local label = if spec.model then ctx.tr("window.weekly_model", { model = spec.model })
+        else ctx.tr(`window.{spec.kind}`)
+      table.insert(windows, model.window({
+        id = spec.id, kind = spec.kind, label = label,
+        usedPercent = entry.utilization, resetsAt = time.parseIso8601(entry.resets_at),
+        periodSeconds = spec.period,
+      }))
+    end
+  end
+  return windows
+end
+
+local CURRENCY_SYMBOLS = { USD = "$", EUR = "€", GBP = "£" }
+
+-- { amount_minor = 1230, exponent = 2, currency = "USD" } -> "$12.30"
+local function money(value): string?
+  if type(value) ~= "table" or type(value.amount_minor) ~= "number" then
+    return nil
+  end
+  local exponent = tonumber(value.exponent) or 2
+  local amount = value.amount_minor / (10 ^ exponent)
+  local code = tostring(value.currency or "")
+  local symbol = CURRENCY_SYMBOLS[code]
+  local number = string.format(`%.{exponent}f`, amount)
+  return if symbol then symbol .. number else `{number} {code}`
+end
+
+local function extraUsageNote(data, ctx): model.Note?
+  local extra = data.extra_usage
+  if type(extra) ~= "table" or extra.is_enabled ~= true then
+    return nil
+  end
+  local spend = type(data.spend) == "table" and data.spend or {}
+  local used = money(spend.used)
+  local limit = money(spend.limit)
+  local value = if used and limit then ctx.tr("note.of", { used = used, limit = limit })
+    elseif used then used
+    else ctx.tr("note.on")
+  return { label = ctx.tr("note.extra_usage"), value = value, tone = "normal" }
+end
+
+-- Exposed for tests: vendor JSON -> Snapshot (or a parse error).
+local function parse(data, oauth, ctx): (model.Snapshot?, model.ProviderError?)
+  local windows = if type(data.limits) == "table" and #data.limits > 0
+    then fromLimits(data.limits, ctx)
+    else fromLegacy(data, ctx)
+  if #windows == 0 then
+    return nil, model.err(E.Parse, "no usage windows in response")
+  end
+  local notes = {}
+  local extra = extraUsageNote(data, ctx)
+  if extra then
+    table.insert(notes, extra)
+  end
+  return model.snapshot({
+    plan = planLabel(oauth or {}),
+    windows = windows,
+    notes = notes,
+    fetchedAt = ctx.now(),
+  }), nil
+end
+
+local function readOauth(ctx): (any, model.ProviderError?)
+  local creds = ctx.readJson(credentialsPath(ctx))
+  local oauth = type(creds) == "table" and creds.claudeAiOauth or nil
+  if type(oauth) ~= "table" or type(oauth.accessToken) ~= "string" or oauth.accessToken == "" then
+    return nil, model.err(E.NotConfigured)
+  end
+  local expiresAt = tonumber(oauth.expiresAt)
+  if expiresAt ~= nil and expiresAt / 1000 <= ctx.now() then
+    return nil, model.err(E.Expired)
+  end
+  return oauth, nil
+end
+
+return provider.define({
+  id = "claude",
+  name = "Claude",
+  brand = {
+    logo = "providers/claude/logo.svg",
+    tint = "#D97757",
+    accent = "#D97757",
+    glyph = "sparkles",
+  },
+
+  isConfigured = function(ctx)
+    return ctx.fileExists(credentialsPath(ctx))
+  end,
+
+  signInHint = function(ctx)
+    return ctx.tr("providers.claude.hint")
+  end,
+
+  fetch = function(ctx, done)
+    local oauth, err = readOauth(ctx)
+    if err then
+      done(nil, err)
+      return
+    end
+    ctx.getJson(USAGE_URL, {
+      ["Authorization"] = `Bearer {oauth.accessToken}`,
+      ["anthropic-beta"] = "oauth-2025-04-20",
+      ["User-Agent"] = ctx.userAgent,
+    }, function(data, httpErr)
+      if httpErr then
+        done(nil, httpErr)
+        return
+      end
+      done(parse(data, oauth, ctx))
+    end)
+  end,
+
+  parse = parse,
+})

@@ -1,0 +1,142 @@
+# Headroom — see how much of your AI subscription limits you have left.
+#
+# Architecture: providers/<id>/ are adapters that turn one vendor's usage API
+# into the shared model (lib/model.luau). The [[service]] is the only entry that
+# fetches; it publishes one normalized report through noctalia.state, and the
+# bar [[widget]] and [[panel]] only draw it. Adding a provider never touches the
+# surfaces: see CONTRIBUTING.md.
+#
+# plugin_api 32: noctalia.getColor (31) for theme-tinted logos and gauges, and
+# container tooltips (32) on the panel's time tracks.
+
+id = "ayagmar/headroom"
+name = "Headroom"
+version = "0.1.0"
+plugin_api = 32
+author = "ayagmar"
+license = "MIT"
+icon = "gauge"
+description = "Claude and Codex subscription limits in your bar: usage, reset countdowns and pace, with a detailed panel."
+tags = ["bar", "panel", "service", "ai", "indicator", "productivity"]
+dependencies = []
+
+# ── Plugin-level settings (shared by the service, every capsule and the panel) ──
+
+[[setting]]
+key = "refresh_minutes"
+type = "int"
+label_key = "settings.refresh_minutes.label"
+description_key = "settings.refresh_minutes.description"
+default = 5
+min = 1
+max = 120
+
+[[setting]]
+key = "warn_percent"
+type = "int"
+label_key = "settings.warn_percent.label"
+description_key = "settings.warn_percent.description"
+default = 70
+min = 1
+max = 100
+
+[[setting]]
+key = "critical_percent"
+type = "int"
+label_key = "settings.critical_percent.label"
+description_key = "settings.critical_percent.description"
+default = 90
+min = 1
+max = 100
+
+[[setting]]
+key = "notify"
+type = "bool"
+label_key = "settings.notify.label"
+description_key = "settings.notify.description"
+default = true
+
+[[setting]]
+key = "brand_colors"
+type = "bool"
+label_key = "settings.brand_colors.label"
+description_key = "settings.brand_colors.description"
+default = true
+
+# ── Entries ─────────────────────────────────────────────────────────────────
+
+# One poller for the whole shell, however many capsules and monitors.
+[[service]]
+id = "poller"
+entry = "service.luau"
+
+[[widget]]
+id = "usage"
+entry = "bar.luau"
+
+  # Right click refreshes. A binding rather than onRightClick, so it is listed
+  # in the widget's settings and users can rebind it.
+  [widget.actions]
+  right = "plugin ayagmar/headroom:poller all refresh"
+
+  [[widget.setting]]
+  key = "provider"
+  type = "select"
+  label_key = "settings.provider.label"
+  description_key = "settings.provider.description"
+  default = "all"
+  options = [
+    { value = "all", label_key = "settings.provider.option.all" },
+    { value = "auto", label_key = "settings.provider.option.auto" },
+    { value = "claude", label_key = "settings.provider.option.claude" },
+    { value = "codex", label_key = "settings.provider.option.codex" },
+  ]
+
+  [[widget.setting]]
+  key = "window"
+  type = "select"
+  label_key = "settings.window.label"
+  description_key = "settings.window.description"
+  default = "tightest"
+  options = [
+    { value = "tightest", label_key = "settings.window.option.tightest" },
+    { value = "session", label_key = "settings.window.option.session" },
+    { value = "weekly", label_key = "settings.window.option.weekly" },
+  ]
+
+  [[widget.setting]]
+  key = "show_logo"
+  type = "bool"
+  label_key = "settings.show_logo.label"
+  default = true
+
+  [[widget.setting]]
+  key = "show_ring"
+  type = "bool"
+  label_key = "settings.show_ring.label"
+  default = true
+
+  [[widget.setting]]
+  key = "show_value"
+  type = "bool"
+  label_key = "settings.show_value.label"
+  default = true
+
+  [[widget.setting]]
+  key = "show_countdown"
+  type = "bool"
+  label_key = "settings.show_countdown.label"
+  description_key = "settings.show_countdown.description"
+  default = false
+
+# Open with: noctalia msg panel-toggle ayagmar/headroom:panel
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 420
+height = 680
+placement = "attached"
+position = "auto"
+open_near_click = true
+dismiss_on_outside_click = true
+capture_keys = ["escape", "r"]
