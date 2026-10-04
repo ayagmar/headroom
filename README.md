@@ -126,9 +126,10 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
   Each vendor's own tools read these same endpoints. Headroom identifies itself as `headroom-noctalia/<version>`,
   except to Antigravity's endpoint, which only answers the `antigravity` User-Agent. It honors `shell.offline_mode`.
 - **Credentials are read-only.** Headroom never refreshes, rewrites or copies a token. An expired session is
-  renewed by the vendor's own CLI (`claude`, `agy`), never by Headroom. Both vendors rotate refresh
-  tokens, so spending one here would sign your CLI out. When a session expires, the card says so, and running the CLI
-  once renews it. Headroom picks up the new session within a minute.
+  renewed by the vendor's own CLI (`claude`, `agy`), never by Headroom, because refresh tokens rotate and spending
+  one here could sign your CLI out. Only when that CLI is not installed, or the renewal fails (for example because
+  you were signed out), does the card ask you to sign in again. Headroom picks up the new session within a minute.
+  Codex has no lightweight renewal command, so an expired Codex session still needs one run of `codex`.
 - **Files written.** Everything goes in the plugin data directory (`~/.local/state/noctalia/plugins/data/ayagmar/headroom/`):
   - `cache.json`: the last usage numbers, so the bar has data right after login. It contains no credentials.
   - `icons/` and `rings/`: small theme-tinted SVGs.
