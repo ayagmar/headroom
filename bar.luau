@@ -90,7 +90,10 @@ local function render()
   local vertical = barWidget.isVertical()
   local now = view.now()
   local maxProviders = math.clamp(state.config("max_providers", 3), 1, 8)
-  local items = view.barItems(report, state.config("provider", "all"), state.config("window", "tightest"), maxProviders, now)
+  local shown = function(id: string): boolean
+    return state.config(`bar_{id}`, true)
+  end
+  local items = view.barItems(report, shown, state.config("window", "tightest"), maxProviders, now)
 
   if #items == 0 then
     barWidget.render(ui.row({ gap = 4, align = "center" }, {

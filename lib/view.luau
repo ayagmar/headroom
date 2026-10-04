@@ -129,14 +129,14 @@ function M.signedIn(report): { any }
 end
 
 -- What a bar capsule shows: a list of { view, window? } pairs, registry order.
---   providerSetting: "all" | <provider id>
---   windowPref:      "tightest" | "session" | "weekly"
---   maxProviders:    when more match, the most urgent ones are kept
---                    (forecast-aware severity first, then usage)
-function M.barItems(report, providerSetting: string, windowPref: string, maxProviders: number, now: number): { any }
+--   shown(id):    whether the user wants this provider in the bar
+--   windowPref:   "tightest" | "session" | "weekly"
+--   maxProviders: when more match, the most urgent ones are kept
+--                 (forecast-aware severity first, then usage)
+function M.barItems(report, shown: (string) -> boolean, windowPref: string, maxProviders: number, now: number): { any }
   local items = {}
   for index, provider in M.signedIn(report) do
-    if providerSetting == "all" or providerSetting == provider.id then
+    if shown(provider.id) then
       local window = model.pick(provider.snapshot and provider.snapshot.windows or {}, windowPref)
       local urgency = if window then RANK[M.severity(window, now)] * 1000 + window.usedPercent else -1
       table.insert(items, { view = provider, window = window, order = index, urgency = urgency })

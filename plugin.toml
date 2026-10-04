@@ -24,21 +24,28 @@ dependencies = ["xdg-open", "secret-tool"]
 # One page, read top to bottom in four groups whose labels carry the group
 # name (the settings schema has no section headers): Bar, Display, Alerts,
 # Data. Every entry reads them, so all capsules and the panel agree.
+# The schema has no multi-select either, so "which providers the bar shows"
+# is one bar_<provider id> toggle per provider.
 
 # Bar ·
 
 [[setting]]
-key = "provider"
-type = "select"
-label_key = "settings.provider.label"
-description_key = "settings.provider.description"
-default = "all"
-options = [
-  { value = "all", label_key = "settings.provider.option.all" },
-  { value = "claude", label_key = "settings.provider.option.claude" },
-  { value = "codex", label_key = "settings.provider.option.codex" },
-  { value = "antigravity", label_key = "settings.provider.option.antigravity" },
-]
+key = "bar_claude"
+type = "bool"
+label_key = "settings.bar_claude.label"
+default = true
+
+[[setting]]
+key = "bar_codex"
+type = "bool"
+label_key = "settings.bar_codex.label"
+default = true
+
+[[setting]]
+key = "bar_antigravity"
+type = "bool"
+label_key = "settings.bar_antigravity.label"
+default = true
 
 [[setting]]
 key = "max_providers"

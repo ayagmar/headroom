@@ -77,8 +77,8 @@ prefix: **Bar**, **Display**, **Alerts** and **Data**.
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `provider` | `select` | `all` | `all` shows every signed-in provider. `claude`, `codex` or `antigravity` pins one. |
-| `max_providers` | `int` | `3` | The most providers the bar shows (1–8). When more are signed in, the ones closest to their limits are shown, with the forecast counted. |
+| `bar_claude`, `bar_codex`, `bar_antigravity` | `bool` | `true` | Which providers the bar shows (one switch each). Switched-off providers still appear in the panel. |
+| `max_providers` | `int` | `3` | The most providers the bar shows (1–8). When more are switched on and signed in, the ones closest to their limits are shown, with the forecast counted. |
 | `window` | `select` | `tightest` | Which window to show: `tightest` (closest to its limit), the 5-hour `session`, or `weekly`. |
 | `bar_style` | `select` | `full` | What each provider shows next to its logo: `full` (ring and percentage), `value` (percentage only) or `ring` (ring only). |
 

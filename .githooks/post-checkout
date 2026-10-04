@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# git checkout / git switch: $1 = previous HEAD, $2 = new HEAD, $3 = 1 for branch checkouts.
-[[ "${3:-0}" == "1" ]] || exit 0
-exec "$(git rev-parse --show-toplevel)/scripts/reload.sh" "$1" "$2"

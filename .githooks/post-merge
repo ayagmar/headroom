@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# git pull / git merge: reload Headroom in the running shell if needed.
-exec "$(git rev-parse --show-toplevel)/scripts/reload.sh" ORIG_HEAD HEAD

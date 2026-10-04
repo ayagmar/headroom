@@ -101,6 +101,15 @@
     "now": "Resetting now"
   },
   "settings": {
+    "bar_antigravity": {
+      "label": "Bar · Show Antigravity"
+    },
+    "bar_claude": {
+      "label": "Bar · Show Claude"
+    },
+    "bar_codex": {
+      "label": "Bar · Show Codex"
+    },
     "bar_style": {
       "description": "What each provider shows next to its logo.",
       "label": "Bar · Style",
@@ -127,22 +136,12 @@
       }
     },
     "max_providers": {
-      "description": "How many providers this capsule shows at most. When more are signed in, the ones closest to their limits win.",
+      "description": "How many providers the bar shows at most. When more are switched on and signed in, the ones closest to their limits win.",
       "label": "Bar · Maximum providers"
     },
     "notify": {
       "description": "Notify once when a window crosses the critical threshold, and again when it resets.",
       "label": "Alerts · Notifications"
-    },
-    "provider": {
-      "description": "Which providers the bar shows. Pick one to pin it.",
-      "label": "Bar · Providers",
-      "option": {
-        "all": "All signed-in providers",
-        "antigravity": "Antigravity",
-        "claude": "Claude",
-        "codex": "Codex"
-      }
     },
     "refresh_minutes": {
       "description": "How often to fetch usage from each provider, in minutes. Failures retry sooner with backoff.",

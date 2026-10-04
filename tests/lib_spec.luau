@@ -250,18 +250,17 @@ t.group("consistency", function()
     t.eq(table.concat(unused, ", "), "", "unused")
   end)
 
-  t.test("the manifest knows every provider, and only those", function()
-    local options = {}
-    for value in manifest:gmatch('value = "([%w_-]+)", label_key = "settings%.provider%.option') do
-      options[value] = true
+  t.test("the manifest has a bar toggle for every provider, and only those", function()
+    local toggles = {}
+    for id in manifest:gmatch('key = "bar_([%w_-]+)"\ntype = "bool"') do
+      toggles[id] = true
     end
-    options.all = nil
     for _, p in registry do
-      t.ok(options[p.id], `plugin.toml provider option for {p.id}`)
-      options[p.id] = nil
+      t.ok(toggles[p.id], `plugin.toml bar_{p.id} toggle`)
+      toggles[p.id] = nil
       t.ok(env.sources[p.brand.logo] ~= nil, `{p.id} logo file exists`)
     end
-    t.eq(next(options), nil, "options without a provider")
+    t.eq(next(toggles), nil, "toggles without a provider")
   end)
 
   t.test("VERSION matches plugin.toml", function()

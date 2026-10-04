@@ -48,12 +48,12 @@ and lets the tests run adapters against recorded responses.
 2. **Add `providers/<id>/logo.svg`**: a monochrome SVG with no `fill` on the root element. [Simple Icons](https://simpleicons.org)
    is a good source.
 3. **Register it** with one line in `providers/registry.luau`.
-4. **Expose it in the bar's provider picker**: add an option to the `provider` setting in `plugin.toml` and a
-   `settings.provider.option.<id>` label to `translations/en.json`.
+4. **Give it a bar switch**: add a `bar_<id>` bool setting (default `true`) to `plugin.toml` and a
+   `settings.bar_<id>.label` ("Bar · Show <Name>") to `translations/en.json`.
 5. **Translate** `providers.<id>.hint` in `translations/en.json`.
 6. **Test it**: record a real response into `tests/fixtures/<id>_usage.json` (redact ids and emails), then add
    parse and fetch cases to `tests/providers_spec.luau`.
-   `scripts/test.sh` fails if steps 3–5 disagree: a provider without a picker option, an option without a
+   `scripts/test.sh` fails if steps 3–5 disagree: a provider without a bar switch, a switch without a
    provider, and a translation used but missing (or defined but unused) are all caught.
 7. **Document it**: add the endpoint and credential path to the README's *Requirements* and *Notes*.
 
@@ -72,16 +72,13 @@ The bar and the panel need no changes.
 ## Development
 
 ```sh
-scripts/dev-install.sh   # once: link into Noctalia, enable, install git hooks
+ln -sfn "$PWD" ~/.local/share/noctalia/plugins/headroom
+noctalia msg plugins enable ayagmar/headroom
 ```
 
-After that, the checkout is the installed plugin:
-
-- `.luau` edits hot-reload.
-- `git pull`, `git checkout` and `git rebase` run `scripts/reload.sh` through `.githooks/`. It re-enables the plugin
-  when `plugin.toml` or `translations/` changed, because those are only read at enable time and
-  `noctalia msg config-reload` does not re-read them.
-- `scripts/reload.sh --force` does the same by hand after editing either one.
+`.luau` edits hot-reload. `plugin.toml` and `translations/` are only read when the plugin is enabled
+(`noctalia msg config-reload` does not re-read them), so after changing either one, run
+`noctalia msg plugins disable ayagmar/headroom && noctalia msg plugins enable ayagmar/headroom`.
 
 Logs are in `~/.cache/noctalia/noctalia.log` (`grep headroom`).
 
