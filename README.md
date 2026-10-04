@@ -40,7 +40,8 @@ gauge and the usage of the window closest to its limit.
 - It also turns amber below the warning threshold when the window is on course to run out long before it resets.
 - When a window is maxed out, the bar shows how long until it comes back (for example `1h 15m`) instead of `100%`.
 
-- **Left click** opens the panel.
+- **Left click** opens the panel. Opening it fetches fresh numbers in the background for any provider whose data is
+  older than 30 seconds, and shows the current numbers while it does.
 - **Right click** refreshes now. The binding is `plugin ayagmar/headroom:poller all refresh`, and you can rebind it in
   the widget's settings.
 - **Middle click** opens Headroom's settings.

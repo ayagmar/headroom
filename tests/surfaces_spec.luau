@@ -251,6 +251,32 @@ t.group("panel", function()
     env.noMissingKeys(t, host)
   end)
 
+  t.test("opening the panel fetches data older than 30 seconds", function()
+    local host = running()
+    local panel = env.start(host, "panel.luau")
+    local before = #host.requests
+    panel.call("onOpen", "")
+    t.eq(#host.requests, before, "just fetched: nothing to do")
+
+    host.clock += 120
+    panel.call("onClose")
+    panel.call("onOpen", "")
+    t.eq(#host.requests, before + 2, "both providers refetched on open")
+
+    panel.call("onClose")
+    panel.call("onOpen", "")
+    t.eq(#host.requests, before + 2, "reopening right away does not fetch again")
+  end)
+
+  t.test("opening the panel refreshes cached or failed providers immediately", function()
+    local host = running({ codexResponse = { ok = true, status = 503, body = "" } })
+    local panel = env.start(host, "panel.luau")
+    local before = #host.requests
+    host.clock += 5
+    panel.call("onOpen", "")
+    t.eq(#host.requests, before + 1, "only the failing provider")
+  end)
+
   t.test("R requests a refresh", function()
     local host = running()
     local panel = env.start(host, "panel.luau")

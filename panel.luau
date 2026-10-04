@@ -86,7 +86,9 @@ local function render()
         controlSize = "sm",
         enabled = not refreshing,
         tooltip = noctalia.tr("panel.refresh_tooltip"),
-        onClick = state.requestRefresh,
+        onClick = function()
+          state.requestRefresh()
+        end,
       }),
       ui.button({
         glyph = "settings",
@@ -110,11 +112,16 @@ noctalia.state.watch(state.REPORT, function(value)
   render()
 end)
 
+-- Opening the panel is a request to see current numbers: show what we have
+-- immediately, and fetch anything older than this in the background.
+local OPEN_FRESHNESS = 30
+
 function onOpen(_context)
   isOpen = true
   report = noctalia.state.get(state.REPORT)
   panel.setWantsSecondTicks(true)
   render()
+  state.requestRefresh(OPEN_FRESHNESS)
 end
 
 function onClose()

@@ -241,10 +241,21 @@ local function tick()
   end
 end
 
-local function refreshAll()
+-- Forces a fetch now. With `maxAge`, providers whose data is fresher than
+-- that many seconds (and healthy) are left alone: opening the panel asks for
+-- fresh numbers, and toggling it twice should not fetch twice.
+local function refreshAll(maxAge: number?)
   local now = ctx.now()
   for _, p in registry do
-    scheduler.force(runtimes[p.id].schedule, now)
+    local rt = runtimes[p.id]
+    local fresh = maxAge ~= nil
+      and rt.error == nil
+      and not rt.stale
+      and rt.snapshot ~= nil
+      and now - (rt.snapshot.fetchedAt or 0) < maxAge
+    if not fresh then
+      scheduler.force(rt.schedule, now)
+    end
   end
   tick()
 end
@@ -275,7 +286,7 @@ end
 
 noctalia.state.watch(state.COMMAND, function(command)
   if type(command) == "table" and command.action == "refresh" then
-    refreshAll()
+    refreshAll(tonumber(command.maxAge))
   end
 end)
 

@@ -99,7 +99,9 @@ function M.errorBanner(provider, compact: boolean)
       variant = "ghost",
       controlSize = "sm",
       tooltip = noctalia.tr("panel.retry"),
-      onClick = state.requestRefresh,
+      onClick = function()
+        state.requestRefresh()
+      end,
     }),
   })
 end

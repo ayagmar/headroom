@@ -26,8 +26,10 @@ M.REPORT = "report"
 -- Written by bar/panel, watched by the service: { action = "refresh", at = ms }.
 M.COMMAND = "command"
 
-function M.requestRefresh()
-  noctalia.state.set(M.COMMAND, { action = "refresh", at = noctalia.nowMs() })
+-- Asks the service for fresh data. `maxAge` (seconds) skips providers fetched
+-- more recently than that; without it every provider is fetched.
+function M.requestRefresh(maxAge: number?)
+  noctalia.state.set(M.COMMAND, { action = "refresh", maxAge = maxAge, at = noctalia.nowMs() })
 end
 
 -- Reads a config value with a fallback for unset or mistyped values.
