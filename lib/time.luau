@@ -59,6 +59,23 @@ function M.toUnix(value: any): number?
   return nil
 end
 
+-- Renew a little early: a token that dies in flight turns a refresh into a
+-- spurious "sign-in rejected".
+M.EXPIRY_MARGIN = 60
+
+-- True when an expiry (Unix seconds, epoch milliseconds or ISO-8601) has
+-- passed or is about to. Unknown expiry counts as valid: let the vendor decide.
+function M.isExpired(expiry: any, now: number): boolean
+  local at = M.toUnix(expiry)
+  if at == nil then
+    return false
+  end
+  if at > 1e11 then
+    at /= 1000 -- epoch milliseconds
+  end
+  return at - M.EXPIRY_MARGIN <= now
+end
+
 -- Compact duration: "<1m", "45m", "3h 12m", "3h", "2d 4h", "6d".
 function M.duration(seconds: number): string
   seconds = math.max(0, math.floor(seconds))

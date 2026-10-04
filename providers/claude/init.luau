@@ -9,8 +9,7 @@
 --
 -- Endpoint: GET https://api.anthropic.com/api/oauth/usage, the one Claude Code's
 -- own /usage screen reads. It is not a documented public API, so parsing is
--- defensive: the newer `limits` array is preferred and the older
--- five_hour / seven_day fields are the fallback.
+-- defensive: every field of the `limits` array is treated as optional.
 
 local provider = require("../../lib/provider.luau")
 local model = require("../../lib/model.luau")
@@ -19,8 +18,8 @@ local time = require("../../lib/time.luau")
 local E = model.ErrorCode
 
 local USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
-local SESSION_SECONDS = 5 * 3600
-local WEEK_SECONDS = 7 * 86400
+local SESSION_SECONDS = model.SESSION_SECONDS
+local WEEK_SECONDS = model.WEEK_SECONDS
 
 local PLAN_NAMES = {
   pro = "Pro",
@@ -97,31 +96,6 @@ local function fromLimits(limits, ctx): { model.Window }
   return windows
 end
 
--- Older response shape: one object per window with `utilization` (0..100).
-local LEGACY = {
-  { key = "five_hour", id = "session", kind = "session", period = SESSION_SECONDS },
-  { key = "seven_day", id = "weekly", kind = "weekly", period = WEEK_SECONDS },
-  { key = "seven_day_opus", id = "weekly:Opus", kind = "model", period = WEEK_SECONDS, model = "Opus" },
-  { key = "seven_day_sonnet", id = "weekly:Sonnet", kind = "model", period = WEEK_SECONDS, model = "Sonnet" },
-}
-
-local function fromLegacy(data, ctx): { model.Window }
-  local windows = {}
-  for _, spec in LEGACY do
-    local entry = data[spec.key]
-    if type(entry) == "table" and entry.utilization ~= nil then
-      local label = if spec.model then ctx.tr("window.weekly_model", { model = spec.model })
-        else ctx.tr(`window.{spec.kind}`)
-      table.insert(windows, model.window({
-        id = spec.id, kind = spec.kind, label = label,
-        usedPercent = entry.utilization, resetsAt = time.parseIso8601(entry.resets_at),
-        periodSeconds = spec.period,
-      }))
-    end
-  end
-  return windows
-end
-
 local CURRENCY_SYMBOLS = { USD = "$", EUR = "€", GBP = "£" }
 
 -- { amount_minor = 1230, exponent = 2, currency = "USD" } -> "$12.30"
@@ -148,14 +122,12 @@ local function extraUsageNote(data, ctx): model.Note?
   local value = if used and limit then ctx.tr("note.of", { used = used, limit = limit })
     elseif used then used
     else ctx.tr("note.on")
-  return { label = ctx.tr("note.extra_usage"), value = value, tone = "normal" }
+  return { label = ctx.tr("note.extra_usage"), value = value }
 end
 
 -- Exposed for tests: vendor JSON -> Snapshot (or a parse error).
 local function parse(data, oauth, ctx): (model.Snapshot?, model.ProviderError?)
-  local windows = if type(data.limits) == "table" and #data.limits > 0
-    then fromLimits(data.limits, ctx)
-    else fromLegacy(data, ctx)
+  local windows = if type(data.limits) == "table" then fromLimits(data.limits, ctx) else {}
   if #windows == 0 then
     return nil, model.err(E.Parse, "no usage windows in response")
   end
@@ -178,8 +150,7 @@ local function readOauth(ctx): (any, model.ProviderError?)
   if type(oauth) ~= "table" or type(oauth.accessToken) ~= "string" or oauth.accessToken == "" then
     return nil, model.err(E.NotConfigured)
   end
-  local expiresAt = tonumber(oauth.expiresAt)
-  if expiresAt ~= nil and expiresAt / 1000 <= ctx.now() then
+  if time.isExpired(oauth.expiresAt, ctx.now()) then
     return nil, model.err(E.Expired)
   end
   return oauth, nil

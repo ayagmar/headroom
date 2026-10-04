@@ -5,6 +5,10 @@
 
 local M = {}
 
+-- The two window lengths every vendor so far uses; pacing needs them.
+M.SESSION_SECONDS = 5 * 3600
+M.WEEK_SECONDS = 7 * 86400
+
 -- One rate-limit window, e.g. "5-hour session" or "weekly, all models".
 export type Window = {
   id: string, -- stable within its provider ("session", "weekly", "weekly:Opus")
@@ -20,7 +24,6 @@ export type Window = {
 export type Note = {
   label: string,
   value: string,
-  tone: string?, -- "normal" | "muted" | "warn"
 }
 
 export type Snapshot = {
@@ -46,11 +49,11 @@ M.ErrorCode = {
 export type ProviderError = {
   code: string,
   detail: string?, -- short technical detail for the tooltip, never a secret
-  hint: string?, -- provider-specific recovery hint, already translated
+  hint: string?, -- recovery hint, filled in by the service from the provider
 }
 
-function M.err(code: string, detail: string?, hint: string?): ProviderError
-  return { code = code, detail = detail, hint = hint }
+function M.err(code: string, detail: string?): ProviderError
+  return { code = code, detail = detail }
 end
 
 local function clampPercent(value: any): number

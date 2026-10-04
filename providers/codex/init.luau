@@ -100,10 +100,10 @@ local function creditsNote(credits, ctx): model.Note?
     return nil
   end
   if credits.unlimited == true then
-    return { label = ctx.tr("note.credits"), value = ctx.tr("note.unlimited"), tone = "normal" }
+    return { label = ctx.tr("note.credits"), value = ctx.tr("note.unlimited") }
   end
   if credits.has_credits == true then
-    return { label = ctx.tr("note.credits"), value = tostring(credits.balance or "0"), tone = "normal" }
+    return { label = ctx.tr("note.credits"), value = tostring(credits.balance or "0") }
   end
   return nil
 end
@@ -165,7 +165,7 @@ return provider.define({
     end
 
     local access = jwt.claims(tokens.access_token, ctx.decodeJson)
-    if access and tonumber(access.exp) and tonumber(access.exp) <= ctx.now() then
+    if access and time.isExpired(access.exp, ctx.now()) then
       done(nil, model.err(E.Expired))
       return
     end

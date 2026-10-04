@@ -89,13 +89,46 @@ function M.headerOf(req, name: string): string?
   return nil
 end
 
-function M.noMissingKeys(t, host)
-  local missing = {}
-  for key in host.missingKeys do
-    table.insert(missing, key)
+-- The Context the service builds, over a fake host.
+function M.context(host)
+  return M.modules(host).require("lib/context.luau").new(host.globals.noctalia, "headroom-noctalia/test")
+end
+
+-- A fresh host, one provider adapter loaded in it, and its context.
+function M.provider(id: string)
+  local host = M.host()
+  return host, M.modules(host).require(`providers/{id}/init.luau`), M.context(host)
+end
+
+-- Runs an adapter's fetch; returns (snapshot, err).
+function M.fetch(provider, ctx)
+  local snapshot, err
+  provider.fetch(ctx, function(s, e)
+    snapshot, err = s, e
+  end)
+  return snapshot, err
+end
+
+-- The Claude fixture with its session window at `sessionPercent`, as a body.
+function M.claudeBody(host, sessionPercent: number?, sessionResetsAt: string?): string
+  local json = host.globals.noctalia.json
+  local data = json.decode(M.fixture("claude_usage.json"))
+  data.limits[1].percent = sessionPercent or data.limits[1].percent
+  data.limits[1].resets_at = sessionResetsAt or data.limits[1].resets_at
+  return json.encode(data)
+end
+
+function M.byId(windows)
+  local out = {}
+  for _, w in windows do
+    out[w.id] = w
   end
-  table.sort(missing)
-  t.eq(table.concat(missing, ", "), "", "missing translation keys")
+  return out
+end
+
+-- Nodes of one type in a ui tree.
+function M.ofType(tree, kind: string)
+  return M.find(tree, function(n) return n.type == kind end)
 end
 
 return M

@@ -12,9 +12,8 @@
 -- its own keyring entry, then read it again. At most once per RENEW_COOLDOWN,
 -- so a dead session does not spawn agy on every refresh.
 --
--- Endpoints: POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary
--- (daily-cloudcode-pa as fallback), and :loadCodeAssist for the plan name
--- (at most every 6 hours). Undocumented. It only answers clients that
+-- Endpoints: POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary,
+-- and :loadCodeAssist for the plan name (at most every 6 hours). Undocumented. It only answers clients that
 -- identify as Antigravity, so this adapter's User-Agent is "antigravity"
 -- rather than Headroom's own. Plans without Antigravity quota get 403
 -- SUBSCRIPTION_REQUIRED, reported as no_plan rather than as a sign-in problem.
@@ -30,16 +29,11 @@ local CODE_ASSIST_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCode
 local CLIENT_METADATA = '{"metadata":{"ideType":"ANTIGRAVITY","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}}'
 -- The plan changes rarely; ask for it at most this often.
 local PLAN_TTL = 6 * 3600
-local QUOTA_URLS = {
-  "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-  "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-}
-local SESSION_SECONDS = 5 * 3600
-local WEEK_SECONDS = 7 * 86400
+local QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
+local SESSION_SECONDS = model.SESSION_SECONDS
+local WEEK_SECONDS = model.WEEK_SECONDS
 local RENEW_COOLDOWN = 600
 local RENEW_TIMEOUT_MS = 30000
--- Renew a little early: a token that dies in flight wastes a refresh cycle.
-local EXPIRY_MARGIN = 60
 
 local KEYRING_LOOKUP = { "secret-tool", "lookup", "service", "gemini", "username", "antigravity" }
 local TOKEN_FILE = "~/.gemini/antigravity-cli/antigravity-oauth-token"
@@ -55,7 +49,7 @@ local KEYRING_BACKOFF = 30 * 60
 local keyringFailedAt = -math.huge
 local planCache: { value: string?, at: number } = { value = nil, at = -math.huge }
 
-type Session = { accessToken: string, expiresAt: number? }
+type Session = { accessToken: string, expiry: any }
 
 -- Accepts go-keyring's "go-keyring-base64:" wrapper, a { token = {...} }
 -- envelope or a flat token object, with snake_case or camelCase keys.
@@ -80,12 +74,7 @@ local function parseSession(raw: string?, ctx): Session?
   if type(access) ~= "string" or access == "" then
     return nil
   end
-  local expiry = token.expiry or token.expires_at or token.expiresAt
-  local expiresAt = time.toUnix(expiry)
-  if expiresAt and expiresAt > 1e11 then
-    expiresAt //= 1000 -- epoch milliseconds
-  end
-  return { accessToken = access, expiresAt = expiresAt }
+  return { accessToken = access, expiry = token.expiry or token.expires_at or token.expiresAt }
 end
 
 local function readSession(ctx, done: (Session?) -> ())
@@ -122,7 +111,7 @@ local function agyCommand(ctx): string?
 end
 
 local function isFresh(session: Session?, now: number): boolean
-  return session ~= nil and (session.expiresAt == nil or session.expiresAt - EXPIRY_MARGIN > now)
+  return session ~= nil and not time.isExpired(session.expiry, now)
 end
 
 -- Asks agy to renew its own session; done(true) when it ran successfully.
@@ -215,35 +204,35 @@ local function withPlan(ctx, headers, done: (string?) -> ())
   end)
 end
 
+-- Google answers 403 SUBSCRIPTION_REQUIRED when the account's plan has no
+-- Antigravity quota: a plan problem, not a sign-in problem.
+local function classify(status: number, body: string): string?
+  if status == 403 and string.find(body, "SUBSCRIPTION_REQUIRED", 1, true) then
+    return E.NoPlan
+  end
+  return nil
+end
+
 local function query(ctx, session: Session, done)
   local headers = {
     ["Authorization"] = `Bearer {session.accessToken}`,
     ["User-Agent"] = "antigravity", -- required by the endpoint; see header comment
   }
-  local finish = done
-  done = function(snapshot, err)
+  ctx.postJson(QUOTA_URL, headers, "{}", function(data, err)
+    if err then
+      done(nil, err)
+      return
+    end
+    local snapshot, parseErr = parse(data, ctx)
     if snapshot == nil then
-      finish(nil, err)
+      done(nil, parseErr)
       return
     end
     withPlan(ctx, headers, function(plan)
       snapshot.plan = plan
-      finish(snapshot, nil)
+      done(snapshot, nil)
     end)
-  end
-  local function attempt(index: number)
-    ctx.postJson(QUOTA_URLS[index], headers, "{}", function(data, err)
-      local retryable = err and (err.code == E.Network or err.code == E.Server)
-      if retryable and index < #QUOTA_URLS then
-        attempt(index + 1)
-      elseif err then
-        done(nil, err)
-      else
-        done(parse(data, ctx))
-      end
-    end)
-  end
-  attempt(1)
+  end, classify)
 end
 
 return provider.define({
@@ -291,11 +280,4 @@ return provider.define({
   end,
 
   parse = parse,
-
-  -- Test seam: forget the renewal and keyring cooldowns.
-  resetRenewCooldown = function()
-    lastRenewAt = -math.huge
-    keyringFailedAt = -math.huge
-    planCache = { value = nil, at = -math.huge }
-  end,
 })

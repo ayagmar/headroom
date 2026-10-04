@@ -39,6 +39,7 @@ gauge and the usage of the window closest to its limit.
 - The color turns amber at the warning threshold and red at the critical threshold.
 - It also turns amber below the warning threshold when the window is on course to run out long before it resets.
 - When a window is maxed out, the bar shows how long until it comes back (for example `1h 15m`) instead of `100%`.
+- When an amount is real but tiny, it reads `<1%` or `>99% left` rather than rounding it away.
 
 - **Left click** opens the panel. Opening it fetches fresh numbers in the background for any provider whose data is
   older than 30 seconds, and shows the current numbers while it does.
@@ -79,27 +80,23 @@ prefix: **Bar**, **Display**, **Alerts** and **Data**.
 | `provider` | `select` | `all` | `all` shows every signed-in provider. `claude`, `codex` or `antigravity` pins one. |
 | `max_providers` | `int` | `3` | The most providers the bar shows (1–8). When more are signed in, the ones closest to their limits are shown, with the forecast counted. |
 | `window` | `select` | `tightest` | Which window to show: `tightest` (closest to its limit), the 5-hour `session`, or `weekly`. |
-| `show_logo` | `bool` | `true` | Show the provider logo. |
-| `show_ring` | `bool` | `true` | Show the ring gauge. |
-| `show_value` | `bool` | `true` | Show the percentage (a bare number on vertical bars). |
-| `show_countdown` | `bool` | `false` | Show the time until the window resets (horizontal bars only). |
+| `bar_style` | `select` | `full` | What each provider shows next to its logo: `full` (ring and percentage), `value` (percentage only) or `ring` (ring only). |
 
 **Display**
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
 | `display` | `select` | `used` | `used` or `remaining`: which side of the limit percentages, rings and meters show. Colors and warnings always follow usage. |
-| `warn_percent` | `int` | `70` | Usage at or above this percentage uses the warning color. |
+| `warn_percent` | `int` | `70` | Usage at or above this percentage uses the warning color. A window on course to be locked out for at least 10% of its length before it resets also does. |
 | `critical_percent` | `int` | `90` | Usage at or above this percentage uses the error color and can notify you. |
-| `pace_colors` | `bool` | `true` | Uses the warning color when a window is on course to be locked out for at least 10% of its length before it resets. |
-| `brand_colors` | `bool` | `true` | Colors healthy meters with each provider's brand color. Turn it off to use the theme's primary color. |
+
+Healthy meters use each provider's brand color.
 
 **Alerts**
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `notify` | `bool` | `true` | Sends one notification per window per reset cycle when usage crosses `critical_percent`. |
-| `notify_reset` | `bool` | `true` | Sends a notification when a window that reached `critical_percent` resets. |
+| `notify` | `bool` | `true` | Notifies once per window when usage crosses `critical_percent`, and again when that window resets. |
 
 **Data**
 
@@ -121,8 +118,8 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
   one request per signed-in provider:
   - Claude: `GET https://api.anthropic.com/api/oauth/usage`
   - Codex: `GET https://chatgpt.com/backend-api/wham/usage`
-  - Antigravity: `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, with
-    `daily-cloudcode-pa.googleapis.com` as the fallback
+  - Antigravity: `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, plus
+    `:loadCodeAssist` for the plan name at most every 6 hours
 
   Each vendor's own tools read these same endpoints. Headroom identifies itself as `headroom-noctalia/<version>`,
   except to Antigravity's endpoint, which only answers the `antigravity` User-Agent. It honors `shell.offline_mode`.

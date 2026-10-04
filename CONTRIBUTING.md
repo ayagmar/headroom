@@ -10,7 +10,8 @@ lib/model.luau             the normalized schema (Window, Snapshot, ProviderErro
 lib/provider.luau          the adapter contract and its Context
 lib/scheduler.luau         per-provider timing, backoff, stale-reply protection
 lib/context.luau           builds the Context: the only capabilities adapters get
-lib/http.luau              JSON GET/POST + vendor-neutral error mapping
+lib/http.luau              JSON GET/POST + error mapping (adapters may classify their own bodies)
+lib/fs.luau                atomic file writes
 lib/notify.luau            which notifications a new snapshot deserves (pure)
 lib/state.luau             the service <-> surfaces shared-state contract
 lib/view.luau, theme.luau  wording, colors, tinted logos, ring gauges
@@ -47,11 +48,13 @@ and lets the tests run adapters against recorded responses.
 2. **Add `providers/<id>/logo.svg`**: a monochrome SVG with no `fill` on the root element. [Simple Icons](https://simpleicons.org)
    is a good source.
 3. **Register it** with one line in `providers/registry.luau`.
-4. **Expose it in the bar's provider picker**: add an option to the `provider` widget setting in `plugin.toml` and a
+4. **Expose it in the bar's provider picker**: add an option to the `provider` setting in `plugin.toml` and a
    `settings.provider.option.<id>` label to `translations/en.json`.
 5. **Translate** `providers.<id>.hint` in `translations/en.json`.
 6. **Test it**: record a real response into `tests/fixtures/<id>_usage.json` (redact ids and emails), then add
    parse and fetch cases to `tests/providers_spec.luau`.
+   `scripts/test.sh` fails if steps 3–5 disagree: a provider without a picker option, an option without a
+   provider, and a translation used but missing (or defined but unused) are all caught.
 7. **Document it**: add the endpoint and credential path to the README's *Requirements* and *Notes*.
 
 The bar and the panel need no changes.

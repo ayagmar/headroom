@@ -7,18 +7,9 @@
 -- (provider + color, percent + colors). A theme switch simply produces new
 -- file names; nothing has to be invalidated.
 
-local M = {}
+local fs = require("./fs.luau")
 
--- Used when the palette cannot resolve a role (should not happen on API 31+).
-local FALLBACK_HEX = {
-  on_surface = "#E6E1E5",
-  on_surface_variant = "#CAC4D0",
-  surface_variant = "#49454F",
-  outline = "#938F99",
-  primary = "#A8C7FA",
-  tertiary = "#E8C26B",
-  error = "#F2B8B5",
-}
+local M = {}
 
 -- Material palettes have an error role but no warning role, and `tertiary`
 -- is often blue or pink, which does not read as "careful". So warning is a
@@ -32,7 +23,7 @@ function M.severityColor(severity: string): string?
   if severity == "critical" then
     return "error"
   elseif severity == "warn" then
-    return if noctalia.isDarkMode and not noctalia.isDarkMode() then WARN_LIGHT else WARN_DARK
+    return if noctalia.isDarkMode() then WARN_DARK else WARN_LIGHT
   end
   return nil
 end
@@ -42,22 +33,13 @@ function M.hex(colorOrRole: string): string
     return colorOrRole:lower()
   end
   colorOrRole = colorOrRole:gsub("/.*$", "") -- "primary/0.6" -> "primary" (SVG gets the solid color)
-  local resolved = noctalia.getColor and noctalia.getColor(colorOrRole)
-  return (resolved or FALLBACK_HEX[colorOrRole] or "#888888"):lower()
+  return (noctalia.getColor(colorOrRole) or "#888888"):lower()
 end
 
--- The meter color for a provider at a given severity (role or hex string;
--- both are valid UiColor values).
+-- The meter color for a provider at a severity: its brand accent while
+-- healthy, the shared warning/critical colors otherwise.
 function M.meterColor(provider, severity: string): string
-  local color = M.severityColor(severity)
-  if color then
-    return color
-  end
-  local useBrand = noctalia.getConfig("brand_colors")
-  if useBrand == false then
-    return "primary"
-  end
-  return provider.brand.accent
+  return M.severityColor(severity) or provider.brand.accent
 end
 
 local dirs = {}
@@ -78,28 +60,25 @@ local function dataDir(sub: string): string?
   return dir
 end
 
--- Writes through a temp file so another entry never loads a half-written SVG.
+-- File names are content-addressed, so once a path exists it is final:
+-- remember it instead of asking the filesystem on every render.
+local known: { [string]: boolean } = {}
+
 local function ensureFile(path: string, build: () -> string?): string?
-  if noctalia.fileExists(path) then
+  if known[path] or noctalia.fileExists(path) then
+    known[path] = true
     return path
   end
   local content = build()
-  if content == nil then
+  if content == nil or not fs.writeAtomic(path, content) then
     return nil
   end
-  local tmp = `{path}.{math.floor(noctalia.nowMs())}.tmp`
-  if not noctalia.writeFile(tmp, content) then
-    return nil
-  end
-  if not noctalia.renameFile(tmp, path) then
-    noctalia.removeFile(tmp)
-    return nil
-  end
+  known[path] = true
   return path
 end
 
--- Path to the provider's logo tinted for the current palette, or nil (callers
--- fall back to the provider's glyph).
+-- Path to the provider's logo tinted for the current palette, or nil when the
+-- data dir is unavailable (callers fall back to the provider's glyph).
 function M.logo(provider): string?
   local dir = dataDir("icons")
   if dir == nil then
@@ -125,7 +104,9 @@ function M.ring(percent: number, fill: string, track: string): string?
   if dir == nil then
     return nil
   end
-  local pct = math.clamp(math.floor(percent + 0.5), 0, 100)
+  -- Same rule as view.roundPercent: a real difference never rounds to an
+  -- empty or a full ring.
+  local pct = math.clamp(math.floor(percent + 0.5), if percent > 0 then 1 else 0, if percent < 100 then 99 else 100)
   local fillHex, trackHex = M.hex(fill), M.hex(track)
   local path = `{dir}/ring-{pct}-{fillHex:sub(2)}-{trackHex:sub(2)}.svg`
   return ensureFile(path, function()

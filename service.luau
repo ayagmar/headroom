@@ -8,7 +8,7 @@
 -- revalidate), and threshold notifications fire from here exactly once per crossing.
 --
 -- Side effects, for review:
---   network  GET to each configured provider's usage endpoint (see providers/*)
+--   network  each signed-in provider's usage endpoint (see providers/*)
 --   reads    each provider's saved sign-in (read-only); see providers/*
 --   spawns   only what adapters declare (Antigravity: secret-tool, agy)
 --   writes   <pluginDataDir>/cache.json (snapshots only, never credentials)
@@ -20,9 +20,13 @@ local context = require("./lib/context.luau")
 local state = require("./lib/state.luau")
 local time = require("./lib/time.luau")
 local notify = require("./lib/notify.luau")
+local fs = require("./lib/fs.luau")
 
 local E = model.ErrorCode
 local TICK_MS = 5000
+-- How often to notice a sign-in or sign-out. Local file checks, but some
+-- providers scan PATH, so not on every tick.
+local SIGN_IN_CHECK_SECONDS = 30
 
 local ctx = context.new(noctalia, `headroom-noctalia/{state.VERSION}`)
 
@@ -31,9 +35,10 @@ local ctx = context.new(noctalia, `headroom-noctalia/{state.VERSION}`)
 type Runtime = {
   schedule: scheduler.Entry,
   configured: boolean,
+  checkedAt: number, -- last isConfigured() check
   snapshot: model.Snapshot?,
   error: model.ProviderError?,
-  stale: boolean,
+  stale: boolean, -- snapshot is from the disk cache, or older than the current error
   notified: { [string]: number }, -- window id -> resetsAt we already warned about
 }
 
@@ -42,6 +47,7 @@ for _, p in registry do
   runtimes[p.id] = {
     schedule = scheduler.new(),
     configured = false,
+    checkedAt = -math.huge,
     snapshot = nil,
     error = nil,
     stale = false,
@@ -51,18 +57,17 @@ end
 
 local lastRefreshAt: number? = nil
 
--- Providers the user switched off: never fetched, never shown.
-local function isDisabled(id: string): boolean
-  local list = noctalia.getConfig("disabled_providers")
-  if type(list) ~= "table" then
-    return false
-  end
-  for _, entry in list do
-    if type(entry) == "string" and entry:lower():gsub("%s", "") == id then
-      return true
+-- Providers the user switched off: never fetched, never shown. Rebuilt when
+-- settings change.
+local disabled: { [string]: boolean } = {}
+
+local function readDisabled()
+  disabled = {}
+  for _, entry in state.config("disabled_providers", {}) do
+    if type(entry) == "string" then
+      disabled[(entry:lower():gsub("%s", ""))] = true
     end
   end
-  return false
 end
 
 local function intervalSeconds(): number
@@ -89,7 +94,7 @@ local function saveCache()
   end
   local text = noctalia.json.encode(doc)
   if text then
-    noctalia.writeFile(path, text)
+    fs.writeAtomic(path, text)
   end
 end
 
@@ -128,41 +133,34 @@ end
 local function publish()
   local now = ctx.now()
   local views = {}
-  local refreshing = false
   for _, p in registry do
-    if isDisabled(p.id) then
-      continue
+    if not disabled[p.id] then
+      local rt = runtimes[p.id]
+      table.insert(views, {
+        id = p.id,
+        name = p.name,
+        brand = p.brand,
+        hint = p.signInHint(ctx),
+        status = statusOf(rt),
+        snapshot = rt.snapshot,
+        error = rt.error,
+        stale = rt.stale,
+        busy = scheduler.isBusy(rt.schedule, now),
+      })
     end
-    local rt = runtimes[p.id]
-    local busy = scheduler.isBusy(rt.schedule, now)
-    refreshing = refreshing or busy
-    table.insert(views, {
-      id = p.id,
-      name = p.name,
-      brand = p.brand,
-      configured = rt.configured,
-      status = statusOf(rt),
-      snapshot = rt.snapshot,
-      error = rt.error,
-      stale = rt.stale,
-      busy = busy,
-    })
   end
-  noctalia.state.set(state.REPORT, {
-    refreshing = refreshing,
-    lastRefreshAt = lastRefreshAt,
-    providers = views,
-  })
+  noctalia.state.set(state.REPORT, { lastRefreshAt = lastRefreshAt, providers = views })
 end
 
 -- ── Notifications ──────────────────────────────────────────────────────────
 
 local function sendNotifications(p, rt: Runtime, previous: model.Snapshot?)
+  local enabled = state.config("notify", true)
   local _, critical = state.thresholds()
   local messages = notify.messages(p.name, previous, rt.snapshot, rt.notified, {
     critical = critical,
-    low = state.config("notify", true) == true,
-    reset = state.config("notify_reset", true) == true,
+    low = enabled,
+    reset = enabled,
     now = ctx.now(),
     tr = noctalia.tr,
     duration = time.duration,
@@ -181,9 +179,10 @@ local function withHint(p, err: model.ProviderError): model.ProviderError
   return err
 end
 
+-- Starts a fetch; the reply publishes when it lands. The caller publishes the
+-- "busy" state once for every fetch it started.
 local function fetchProvider(p, rt: Runtime, now: number)
   local generation = scheduler.start(rt.schedule, now)
-  publish()
   local ok, thrown = pcall(p.fetch, ctx, function(snapshot, err)
     local finishedAt = ctx.now()
     if not scheduler.finish(rt.schedule, generation, finishedAt, intervalSeconds(), err) then
@@ -207,33 +206,35 @@ local function fetchProvider(p, rt: Runtime, now: number)
   if not ok then
     -- A bug in an adapter must not take the other providers down with it.
     noctalia.log(`[headroom] {p.id}: adapter error: {thrown}`)
-    scheduler.finish(rt.schedule, generation, ctx.now(), intervalSeconds(), model.err(E.Parse, "adapter error"))
     rt.error = model.err(E.Parse, "adapter error")
-    publish()
+    scheduler.finish(rt.schedule, generation, ctx.now(), intervalSeconds(), rt.error)
   end
 end
 
-local function tick()
+local function tick(recheckSignIn: boolean?)
   local now = ctx.now()
   local changed = false
   for _, p in registry do
-    if isDisabled(p.id) then
+    local rt = runtimes[p.id]
+    if disabled[p.id] then
       continue
     end
-    local rt = runtimes[p.id]
-    local configured = p.isConfigured(ctx)
-    if configured ~= rt.configured then
-      rt.configured = configured
-      changed = true
-      if configured then
-        scheduler.force(rt.schedule, now) -- signed in since the last tick
-      else
-        rt.error = nil
+    if recheckSignIn or now - rt.checkedAt >= SIGN_IN_CHECK_SECONDS then
+      rt.checkedAt = now
+      local configured = p.isConfigured(ctx)
+      if configured ~= rt.configured then
+        rt.configured = configured
+        changed = true
+        if configured then
+          scheduler.force(rt.schedule, now) -- signed in since the last check
+        else
+          rt.error = nil
+        end
       end
     end
-    if configured and scheduler.isDue(rt.schedule, now) then
+    if rt.configured and scheduler.isDue(rt.schedule, now) then
       fetchProvider(p, rt, now)
-      changed = false -- fetchProvider published
+      changed = true
     end
   end
   if changed then
@@ -241,23 +242,21 @@ local function tick()
   end
 end
 
--- Forces a fetch now. With `maxAge`, providers whose data is fresher than
--- that many seconds (and healthy) are left alone: opening the panel asks for
--- fresh numbers, and toggling it twice should not fetch twice.
-local function refreshAll(maxAge: number?)
+-- A refresh request. Without `maxAge` (refresh button, R, IPC) every provider
+-- is fetched now. With it (opening the panel), only providers whose last good
+-- data is older than `maxAge` are fetched, and a provider in backoff after a
+-- failure keeps its backoff: opening the panel must not hammer a throttled API.
+local function refresh(maxAge: number?)
   local now = ctx.now()
   for _, p in registry do
     local rt = runtimes[p.id]
-    local fresh = maxAge ~= nil
-      and rt.error == nil
-      and not rt.stale
-      and rt.snapshot ~= nil
-      and now - (rt.snapshot.fetchedAt or 0) < maxAge
-    if not fresh then
+    local wanted = maxAge == nil
+      or (rt.error == nil and (rt.stale or rt.snapshot == nil or now - (rt.snapshot.fetchedAt or 0) >= maxAge))
+    if wanted then
       scheduler.force(rt.schedule, now)
     end
   end
-  tick()
+  tick(true)
 end
 
 -- ── Host callbacks ─────────────────────────────────────────────────────────
@@ -268,11 +267,12 @@ end
 
 function onIpc(event, _payload)
   if event == "refresh" then
-    refreshAll()
+    refresh()
   end
 end
 
 function onConfigChanged()
+  readDisabled()
   -- A new interval applies from now on; reschedule so a shorter one takes effect.
   local now = ctx.now()
   for _, p in registry do
@@ -286,10 +286,11 @@ end
 
 noctalia.state.watch(state.COMMAND, function(command)
   if type(command) == "table" and command.action == "refresh" then
-    refreshAll(tonumber(command.maxAge))
+    refresh(tonumber(command.maxAge))
   end
 end)
 
+readDisabled()
 loadCache()
 noctalia.setUpdateInterval(TICK_MS)
 tick()

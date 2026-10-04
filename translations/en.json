@@ -6,9 +6,7 @@
     "now": "just now"
   },
   "bar": {
-    "empty": "Headroom: no Claude, Codex or Antigravity sign-in found",
-    "loading": "Fetching usage…",
-    "stale": "cached"
+    "empty": "Headroom: no AI provider sign-in found"
   },
   "duration": {
     "d": "{d}d",
@@ -20,11 +18,9 @@
   },
   "error": {
     "auth": {
-      "body": "The provider rejected the saved sign-in.",
       "title": "Sign-in rejected"
     },
     "expired": {
-      "body": "The saved session has expired.",
       "title": "Session expired"
     },
     "network": {
@@ -36,7 +32,6 @@
       "title": "No quota on this plan"
     },
     "not_configured": {
-      "body": "No sign-in found.",
       "title": "Not signed in"
     },
     "parse": {
@@ -73,17 +68,13 @@
     "runs_out": "Runs out in {duration}"
   },
   "panel": {
-    "cached": "cached",
     "elapsed_tooltip": "{percent}% of this window has elapsed",
-    "empty_body": "Headroom reads the sign-ins of Claude Code, the Codex CLI and Antigravity. Sign in to any of them and it shows up here automatically.",
+    "empty_body": "Headroom reads the sign-ins your AI coding tools already saved. Sign in to a supported tool and it shows up here automatically.",
     "empty_title": "No AI subscriptions found",
-    "fetching": "Fetching usage…",
     "not_connected": "{provider} · not connected",
     "not_refreshed": "Not refreshed yet",
     "open_dashboard": "Open {provider} usage page",
     "refresh_tooltip": "Refresh now (R)",
-    "refreshing": "Refreshing…",
-    "refreshing_provider": "Refreshing…",
     "retry": "Retry",
     "settings_tooltip": "Settings",
     "showing_cached": "Showing data from {ago}.",
@@ -106,21 +97,25 @@
     }
   },
   "reset": {
-    "in": "Resets in {duration}",
-    "in_at": "Resets in {duration} · {clock}",
+    "in": "Resets in {until_reset}",
     "now": "Resetting now"
   },
   "settings": {
-    "brand_colors": {
-      "description": "Color healthy meters with each provider's brand color instead of the theme's primary color.",
-      "label": "Display · Brand colors"
+    "bar_style": {
+      "description": "What each provider shows next to its logo.",
+      "label": "Bar · Style",
+      "option": {
+        "full": "Ring and percentage",
+        "ring": "Ring only",
+        "value": "Percentage only"
+      }
     },
     "critical_percent": {
       "description": "Usage at or above this percentage is shown in the error color and can notify you.",
       "label": "Display · Critical at (%)"
     },
     "disabled_providers": {
-      "description": "Provider ids Headroom ignores entirely: never fetched, never shown. Available: claude, codex, antigravity.",
+      "description": "Provider ids Headroom ignores entirely: never fetched, never shown.",
       "label": "Data · Disabled providers"
     },
     "display": {
@@ -136,16 +131,8 @@
       "label": "Bar · Maximum providers"
     },
     "notify": {
-      "description": "Notify once per window when usage crosses the critical threshold.",
-      "label": "Alerts · Running low"
-    },
-    "notify_reset": {
-      "description": "Notify when a window that reached the critical threshold resets, so you know you're back.",
-      "label": "Alerts · Window reset"
-    },
-    "pace_colors": {
-      "description": "Use the warning color when a window is on course to run out well before it resets, even below the warning threshold.",
-      "label": "Display · Forecast colors"
+      "description": "Notify once when a window crosses the critical threshold, and again when it resets.",
+      "label": "Alerts · Notifications"
     },
     "provider": {
       "description": "Which providers the bar shows. Pick one to pin it.",
@@ -161,19 +148,6 @@
       "description": "How often to fetch usage from each provider, in minutes. Failures retry sooner with backoff.",
       "label": "Data · Refresh interval (min)"
     },
-    "show_countdown": {
-      "description": "Show the time until the displayed window resets next to the percentage (horizontal bars only).",
-      "label": "Bar · Show reset countdown"
-    },
-    "show_logo": {
-      "label": "Bar · Show logo"
-    },
-    "show_ring": {
-      "label": "Bar · Show ring gauge"
-    },
-    "show_value": {
-      "label": "Bar · Show percentage"
-    },
     "warn_percent": {
       "description": "Usage at or above this percentage is shown in the warning color.",
       "label": "Display · Warning at (%)"
@@ -188,12 +162,18 @@
       }
     }
   },
+  "status": {
+    "cached": "cached",
+    "fetching": "Fetching usage…",
+    "refreshing": "Refreshing…"
+  },
   "tooltip": {
     "forecast": "Forecast",
     "resets": "Resets"
   },
   "window": {
     "code_review": "Code review",
+    "other": "Limit",
     "session": "Session",
     "weekly": "Weekly",
     "weekly_model": "Weekly · {model}"

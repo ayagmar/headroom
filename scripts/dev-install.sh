@@ -10,7 +10,12 @@ plugins="${XDG_DATA_HOME:-$HOME/.local/share}/noctalia/plugins"
 
 mkdir -p "$plugins"
 ln -sfn "$root" "$plugins/headroom"
-git -C "$root" config core.hooksPath .githooks
+current="$(git -C "$root" config --get core.hooksPath || true)"
+if [[ -n "$current" && "$current" != ".githooks" ]]; then
+  echo "core.hooksPath is already '$current'; leaving it. Run scripts/reload.sh after pulls instead."
+else
+  git -C "$root" config core.hooksPath .githooks
+fi
 chmod +x "$root"/.githooks/* "$root"/scripts/*.sh
 
 if command -v noctalia >/dev/null 2>&1 && noctalia msg plugins list >/dev/null 2>&1; then

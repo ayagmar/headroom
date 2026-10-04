@@ -23,7 +23,8 @@ export type Context = {
   decodeJson: (text: string) -> (any, string?),
   -- GET a JSON document. done(data) on success, done(nil, ProviderError) otherwise.
   getJson: (url: string, headers: { [string]: string }, done: (any, model.ProviderError?) -> ()) -> (),
-  postJson: (url: string, headers: { [string]: string }, body: string, done: (any, model.ProviderError?) -> ()) -> (),
+  -- classify(status, body) -> ErrorCode? maps vendor-specific error bodies.
+  postJson: (url: string, headers: { [string]: string }, body: string, done: (any, model.ProviderError?) -> (), classify: ((number, string) -> string?)?) -> (),
   -- Runs a program directly (argv, no shell). done(nil) when it could not start.
   -- Adapters that spawn must say why in their header comment and in the README.
   run: (argv: { string }, timeoutMs: number, done: (result: { exitCode: number, stdout: string }?) -> ()) -> (),

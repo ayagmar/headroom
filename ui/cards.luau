@@ -1,8 +1,7 @@
 --!nonstrict
--- Card components: a provider card with its windows, error banner and notes,
--- plus the disconnected row and the empty state. Shared by every surface that
--- shows full provider detail (the panel today), so they read the same
--- everywhere. Pure functions of their arguments: no state, no side effects.
+-- Card components: the provider card (windows, error banner, notes), the
+-- disconnected row and the empty state, plus the logo and caption used by the
+-- bar as well. Pure functions of their arguments: no state, no side effects.
 
 local state = require("../lib/state.luau")
 local theme = require("../lib/theme.luau")
@@ -32,10 +31,10 @@ function M.caption(text: string, color: string?, extra)
   return ui.label(props)
 end
 
-function M.windowRow(provider, window, now: number, dimmed: boolean)
+local function windowRow(provider, window, now: number, dimmed: boolean)
   local severity = view.severity(window, now)
   local paceText, paceColor, pace = view.pace(window, now)
-  local resets = view.resetsIn(window, now, true)
+  local resets = view.resetsIn(window, now)
 
   local children = {
     ui.row({ align = "center", gap = 8 }, {
@@ -81,12 +80,14 @@ function M.windowRow(provider, window, now: number, dimmed: boolean)
   return ui.column({ gap = 6, key = window.id, opacity = if dimmed then 0.6 else 1 }, children)
 end
 
-function M.errorBanner(provider, compact: boolean)
+-- What failed and how to fix it; when older data is still shown below, says
+-- how old it is.
+local function errorBanner(provider, now: number)
   local err = provider.error
   local title = noctalia.tr(`error.{err.code}.title`)
   local body = err.hint or noctalia.tr(`error.{err.code}.body`)
-  if compact and provider.snapshot and provider.snapshot.fetchedAt then
-    body = noctalia.tr("panel.showing_cached", { ago = time.ago(view.now() - provider.snapshot.fetchedAt) }) .. " " .. body
+  if provider.snapshot and provider.snapshot.fetchedAt then
+    body = noctalia.tr("panel.showing_cached", { ago = time.ago(now - provider.snapshot.fetchedAt) }) .. " " .. body
   end
   return ui.row({ gap = 10, align = "center", padding = 10, radius = 10, fill = "error/0.12" }, {
     ui.glyph({ name = "alert-circle", size = 18, color = "error" }),
@@ -106,17 +107,12 @@ function M.errorBanner(provider, compact: boolean)
   })
 end
 
-function M.notesBlock(notes)
+local function notesBlock(notes)
   local rows = {}
   for i, note in notes do
     table.insert(rows, ui.row({ align = "center", key = `note{i}` }, {
       M.caption(note.label, nil, { flexGrow = 1 }),
-      ui.label({
-        text = note.value,
-        fontSize = 11,
-        fontWeight = "medium",
-        color = if note.tone == "warn" then theme.severityColor("warn") elseif note.tone == "muted" then "on_surface_variant" else "on_surface",
-      }),
+      ui.label({ text = note.value, fontSize = 11, fontWeight = "medium", color = "on_surface" }),
     }))
   end
   return ui.column({ gap = 4 }, rows)
@@ -127,9 +123,9 @@ function M.providerCard(provider, now: number, options)
   local snapshot = provider.snapshot
   local subtitle = snapshot and snapshot.plan or nil
   if provider.busy then
-    subtitle = noctalia.tr("panel.refreshing_provider")
+    subtitle = noctalia.tr("status.refreshing")
   elseif provider.stale and snapshot and provider.status ~= "error" then
-    subtitle = (if subtitle then subtitle .. " · " else "") .. noctalia.tr("panel.cached")
+    subtitle = (if subtitle then subtitle .. " · " else "") .. noctalia.tr("status.cached")
   end
 
   local headerChildren = {
@@ -156,31 +152,30 @@ function M.providerCard(provider, now: number, options)
   local dimmed = provider.status == "error"
 
   if provider.status == "error" and provider.error then
-    table.insert(body, M.errorBanner(provider, snapshot ~= nil))
+    table.insert(body, errorBanner(provider, now))
   end
 
   if snapshot and #snapshot.windows > 0 then
     for _, window in snapshot.windows do
-      table.insert(body, M.windowRow(provider, window, now, dimmed))
+      table.insert(body, windowRow(provider, window, now, dimmed))
     end
     if snapshot.notes and #snapshot.notes > 0 then
       table.insert(body, ui.separator({ color = "outline/0.25" }))
-      table.insert(body, M.notesBlock(snapshot.notes))
+      table.insert(body, notesBlock(snapshot.notes))
     end
   elseif provider.status == "loading" then
-    table.insert(body, M.caption(noctalia.tr("panel.fetching")))
+    table.insert(body, M.caption(noctalia.tr("status.fetching")))
   end
 
   return ui.column({ key = provider.id, gap = 12, padding = 14, radius = 14, fill = CARD_FILL }, body)
 end
 
 function M.disconnectedRow(provider)
-  local hint = noctalia.tr(`providers.{provider.id}.hint`)
   return ui.row({ key = `off-{provider.id}`, align = "center", gap = 10, padding = 10, radius = 12, border = "outline/0.25", borderWidth = 1 }, {
     M.logo(provider, 18, 0.5),
     ui.column({ gap = 1, flexGrow = 1 }, {
       ui.label({ text = noctalia.tr("panel.not_connected", { provider = provider.name }), fontSize = 12, color = "on_surface_variant" }),
-      M.caption(hint, "on_surface_variant/0.8", { maxLines = 2 }),
+      M.caption(provider.hint, "on_surface_variant/0.8", { maxLines = 2 }),
     }),
   })
 end

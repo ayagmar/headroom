@@ -16,16 +16,14 @@ end
 
 local RANK = { ok = 0, warn = 1, critical = 2 }
 
--- Usage severity, raised by the forecast when `pace_colors` is on: a window at
--- 60% that will lock you out for hours deserves the warning color now.
-function M.severity(window, now: number?): string
+-- Usage severity, raised by the forecast: a window at 60% that will lock you
+-- out for hours deserves the warning color now.
+function M.severity(window, now: number): string
   local warn, critical = state.thresholds()
   local severity = model.severity(window.usedPercent, warn, critical)
-  if now ~= nil and state.config("pace_colors", true) then
-    local p = pace.compute(window, now)
-    if p and RANK[p.severity] > RANK[severity] then
-      severity = p.severity
-    end
+  local p = pace.compute(window, now)
+  if p and RANK[p.severity] > RANK[severity] then
+    severity = p.severity
   end
   return severity
 end
@@ -48,6 +46,7 @@ end
 
 -- Whole percent, except that rounding never erases a difference: 0.4 is
 -- "<1", 99.6 is ">99". A meter at "100% left" after real use reads as broken.
+-- theme.ring applies the same rule to the arc.
 function M.roundPercent(value: number): string
   if value > 0 and value < 1 then
     return "<1"
@@ -69,27 +68,32 @@ end
 -- Wall-clock time of a reset in the shell's own time format, with the weekday
 -- when it is more than a day away: "20:19", "Sat 09:59".
 function M.clock(at: number, now: number): string
-  local format = if noctalia.timeFormat then noctalia.timeFormat() else "%H:%M"
-  local clock = noctalia.formatTime(format, at)
+  local clock = noctalia.formatTime(noctalia.timeFormat(), at)
   if at - now >= 86400 then
     return `{noctalia.formatTime("%a", at)} {clock}`
   end
   return clock
 end
 
--- "Resets in 3h 12m · 20:19", or nil when the vendor gave no reset time.
-function M.resetsIn(window, now: number, withClock: boolean?): string?
+-- "3h 12m · 20:19" until the window resets, or nil when the vendor gave no
+-- reset time or it has passed.
+function M.untilReset(window, now: number): string?
+  if window.resetsAt == nil or window.resetsAt <= now then
+    return nil
+  end
+  return `{time.duration(window.resetsAt - now)} · {M.clock(window.resetsAt, now)}`
+end
+
+-- "Resets in 3h 12m · 20:19" / "Resetting now", or nil without a reset time.
+function M.resetsIn(window, now: number): string?
   if window.resetsAt == nil then
     return nil
   end
-  local remaining = window.resetsAt - now
-  if remaining <= 0 then
+  local untilReset = M.untilReset(window, now)
+  if untilReset == nil then
     return noctalia.tr("reset.now")
   end
-  if withClock then
-    return noctalia.tr("reset.in_at", { duration = time.duration(remaining), clock = M.clock(window.resetsAt, now) })
-  end
-  return noctalia.tr("reset.in", { duration = time.duration(remaining) })
+  return noctalia.tr("reset.in", { until_reset = untilReset })
 end
 
 -- Forecast as (text, color role, pace), or nil when it is too early to say.
@@ -106,55 +110,44 @@ function M.pace(window, now: number): (string?, string?, pace.Pace?)
   elseif p.status == "projected" then
     local projected = p.projectedPercent or 0
     if M.showsRemaining() then
-      return noctalia.tr("pace.projected_left", { percent = math.floor(100 - projected + 0.5) }), "on_surface_variant", p
+      return noctalia.tr("pace.projected_left", { percent = M.roundPercent(100 - projected) }), "on_surface_variant", p
     end
-    return noctalia.tr("pace.projected", { percent = math.floor(projected + 0.5) }), "on_surface_variant", p
+    return noctalia.tr("pace.projected", { percent = M.roundPercent(projected) }), "on_surface_variant", p
   end
   return nil, nil, p
 end
 
--- Providers that can be shown at all (signed in), in registry order.
-function M.visibleProviders(report): { any }
+-- Signed-in providers, in registry order.
+function M.signedIn(report): { any }
   local out = {}
-  if type(report) ~= "table" or type(report.providers) ~= "table" then
-    return out
-  end
-  for _, view in report.providers do
-    if view.configured then
-      table.insert(out, view)
+  for _, provider in (if type(report) == "table" and report.providers then report.providers else {}) do
+    if provider.status ~= "absent" then
+      table.insert(out, provider)
     end
   end
   return out
-end
-
--- How pressing a provider's shown window is: forecast-aware severity first,
--- then usage. Used to pick which providers fit in a capped bar capsule.
-function M.urgency(item, now: number): number
-  if item.window == nil then
-    return -1
-  end
-  return RANK[M.severity(item.window, now)] * 1000 + item.window.usedPercent
 end
 
 -- What a bar capsule shows: a list of { view, window? } pairs, registry order.
 --   providerSetting: "all" | <provider id>
 --   windowPref:      "tightest" | "session" | "weekly"
 --   maxProviders:    when more match, the most urgent ones are kept
+--                    (forecast-aware severity first, then usage)
 function M.barItems(report, providerSetting: string, windowPref: string, maxProviders: number, now: number): { any }
   local items = {}
-  for index, view in M.visibleProviders(report) do
-    if providerSetting == "all" or providerSetting == view.id then
-      local windows = view.snapshot and view.snapshot.windows or {}
-      table.insert(items, { view = view, window = model.pick(windows, windowPref), order = index })
+  for index, provider in M.signedIn(report) do
+    if providerSetting == "all" or providerSetting == provider.id then
+      local window = model.pick(provider.snapshot and provider.snapshot.windows or {}, windowPref)
+      local urgency = if window then RANK[M.severity(window, now)] * 1000 + window.usedPercent else -1
+      table.insert(items, { view = provider, window = window, order = index, urgency = urgency })
     end
   end
   if #items <= maxProviders then
     return items
   end
   table.sort(items, function(a, b)
-    local ua, ub = M.urgency(a, now), M.urgency(b, now)
-    if ua ~= ub then
-      return ua > ub
+    if a.urgency ~= b.urgency then
+      return a.urgency > b.urgency
     end
     return a.order < b.order
   end)

@@ -30,11 +30,8 @@ function M.new(sources)
     httpHandler = nil, -- function(req) -> response | nil (nil = never answers)
     pending = {}, -- callbacks of unanswered requests
     notifications = {},
-    logs = {},
-    missingKeys = {},
     stateValues = {},
     watchers = {},
-    updateInterval = nil,
     toggledPanels = {},
     commands = { ["xdg-open"] = true },
     spawned = {},
@@ -47,7 +44,6 @@ function M.new(sources)
   local function tr(key: string, subst)
     local text = lookup(translations, key)
     if text == nil then
-      host.missingKeys[key] = true
       return key
     end
     if subst then
@@ -67,9 +63,7 @@ function M.new(sources)
   end
 
   local noctalia = {
-    log = function(msg)
-      table.insert(host.logs, msg)
-    end,
+    log = function() end,
     nowMs = function()
       return host.clock * 1000
     end,
@@ -80,14 +74,14 @@ function M.new(sources)
     getConfig = function(key)
       return host.config[key]
     end,
+    isDarkMode = function()
+      return true
+    end,
     getColor = function(role)
       local palette = { on_surface = "#E0E0E0", surface_variant = "#303030", primary = "#88AAFF", error = "#FF6666", tertiary = "#FFCC66" }
       return palette[role]
     end,
     tr = tr,
-    trp = function(key, _count, subst)
-      return tr(key, subst)
-    end,
     readFile = function(path)
       local content = host.files[expand(path)]
       if content == nil then
@@ -130,9 +124,7 @@ function M.new(sources)
     notify = function(title, body)
       table.insert(host.notifications, { title = title, body = body })
     end,
-    setUpdateInterval = function(ms)
-      host.updateInterval = ms
-    end,
+    setUpdateInterval = function() end,
     togglePanel = function(id)
       table.insert(host.toggledPanels, id)
     end,
@@ -198,7 +190,7 @@ function M.new(sources)
     end
   end
   local ui = {}
-  for _, kind in { "column", "row", "scroll", "box", "label", "markdown", "glyph", "image", "separator", "spacer", "progress", "button", "graph", "input", "select", "slider", "toggle" } do
+  for _, kind in { "column", "row", "scroll", "label", "glyph", "image", "separator", "progress", "button" } do
     ui[kind] = node(kind)
   end
 
@@ -224,15 +216,6 @@ function M.new(sources)
       setWantsSecondTicks = function() end,
     },
   }
-
-  -- Answers every pending request with the current handler.
-  function host.flush()
-    local pending = host.pending
-    host.pending = {}
-    for _, cb in pending do
-      cb(host.httpHandler and host.httpHandler(host.requests[#host.requests]) or { ok = false, status = 0, body = "" })
-    end
-  end
 
   return host
 end

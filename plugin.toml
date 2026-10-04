@@ -62,29 +62,16 @@ options = [
 ]
 
 [[setting]]
-key = "show_logo"
-type = "bool"
-label_key = "settings.show_logo.label"
-default = true
-
-[[setting]]
-key = "show_ring"
-type = "bool"
-label_key = "settings.show_ring.label"
-default = true
-
-[[setting]]
-key = "show_value"
-type = "bool"
-label_key = "settings.show_value.label"
-default = true
-
-[[setting]]
-key = "show_countdown"
-type = "bool"
-label_key = "settings.show_countdown.label"
-description_key = "settings.show_countdown.description"
-default = false
+key = "bar_style"
+type = "select"
+label_key = "settings.bar_style.label"
+description_key = "settings.bar_style.description"
+default = "full"
+options = [
+  { value = "full", label_key = "settings.bar_style.option.full" },
+  { value = "value", label_key = "settings.bar_style.option.value" },
+  { value = "ring", label_key = "settings.bar_style.option.ring" },
+]
 
 # Display ·
 
@@ -117,20 +104,6 @@ default = 90
 min = 1
 max = 100
 
-[[setting]]
-key = "pace_colors"
-type = "bool"
-label_key = "settings.pace_colors.label"
-description_key = "settings.pace_colors.description"
-default = true
-
-[[setting]]
-key = "brand_colors"
-type = "bool"
-label_key = "settings.brand_colors.label"
-description_key = "settings.brand_colors.description"
-default = true
-
 # Alerts ·
 
 [[setting]]
@@ -138,13 +111,6 @@ key = "notify"
 type = "bool"
 label_key = "settings.notify.label"
 description_key = "settings.notify.description"
-default = true
-
-[[setting]]
-key = "notify_reset"
-type = "bool"
-label_key = "settings.notify_reset.label"
-description_key = "settings.notify_reset.description"
 default = true
 
 # Data ·

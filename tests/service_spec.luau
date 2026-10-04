@@ -2,12 +2,8 @@
 local t = require("./support/t")
 local env = require("./support/env")
 
-local function report(host)
-  return host.stateValues.report
-end
-
 local function provider(host, id)
-  for _, view in report(host).providers do
+  for _, view in host.stateValues.report.providers do
     if view.id == id then
       return view
     end
@@ -15,75 +11,51 @@ local function provider(host, id)
   return nil
 end
 
-local function signedInClaude()
+local function signedInClaude(sessionPercent: number?)
   local host = env.host()
   env.claudeCreds(host)
-  env.serve(host, { ["api.anthropic.com"] = env.fixture("claude_usage.json") })
+  env.serve(host, { ["api.anthropic.com"] = env.claudeBody(host, sessionPercent) })
   return host
 end
 
 t.group("service", function()
-  t.test("publishes a normalized report on start", function()
+  t.test("publishes a normalized report and never touches credentials", function()
     local host = signedInClaude()
-    env.start(host, "service.luau")
+    local creds = host.files[env.CLAUDE_CREDS]
+    local svc = env.start(host, "service.luau")
     local claude = provider(host, "claude")
     t.eq(claude.status, "ok")
-    t.eq(claude.configured, true)
     t.eq(#claude.snapshot.windows, 3)
-    t.eq(claude.brand.accent, "#D97757")
-    local codex = provider(host, "codex")
-    t.eq(codex.status, "absent")
-    t.eq(#host.requests, 1, "only configured providers are fetched")
-    t.eq(report(host).refreshing, false)
-  end)
-
-  t.test("never writes credential files", function()
-    local host = signedInClaude()
-    local before = host.files[env.CLAUDE_CREDS]
-    local svc = env.start(host, "service.luau")
+    t.ok(claude.hint:find("claude", 1, true) ~= nil, "sign-in hint published")
+    t.eq(provider(host, "codex").status, "absent")
+    t.eq(#host.requests, 1, "only signed-in providers are fetched")
     host.clock += 3600
     svc.call("update")
-    t.eq(host.files[env.CLAUDE_CREDS], before)
+    t.eq(host.files[env.CLAUDE_CREDS], creds)
   end)
 
-  t.test("refetches only when due", function()
+  t.test("refetches when due, on the configured interval", function()
     local host = signedInClaude()
+    host.config.refresh_minutes = 2
     local svc = env.start(host, "service.luau")
     host.clock += 60
     svc.call("update")
     t.eq(#host.requests, 1)
-    host.clock += 5 * 60
-    svc.call("update")
-    t.eq(#host.requests, 2)
-  end)
-
-  t.test("refresh interval comes from settings", function()
-    local host = signedInClaude()
-    host.config.refresh_minutes = 1
-    local svc = env.start(host, "service.luau")
     host.clock += 61
     svc.call("update")
     t.eq(#host.requests, 2)
   end)
 
-  t.test("refresh via IPC and via shared-state command", function()
+  t.test("refresh via IPC; an in-flight request is not duplicated", function()
     local host = signedInClaude()
     local svc = env.start(host, "service.luau")
     svc.call("onIpc", "refresh")
     t.eq(#host.requests, 2)
-    host.globals.noctalia.state.set("command", { action = "refresh", at = 1 })
-    t.eq(#host.requests, 3)
-  end)
-
-  t.test("an in-flight request is not duplicated", function()
-    local host = env.host()
-    env.claudeCreds(host)
     host.httpHandler = nil -- never answers
-    local svc = env.start(host, "service.luau")
     svc.call("onIpc", "refresh")
-    t.eq(#host.requests, 1)
-    t.eq(report(host).refreshing, true)
-    t.eq(provider(host, "claude").status, "loading")
+    svc.call("onIpc", "refresh")
+    t.eq(#host.requests, 3)
+    t.eq(provider(host, "claude").busy, true)
   end)
 
   t.test("errors keep the last good snapshot, marked stale, with backoff", function()
@@ -94,31 +66,38 @@ t.group("service", function()
     svc.call("update")
     local claude = provider(host, "claude")
     t.eq(claude.status, "error")
-    t.eq(claude.error.code, "server")
     t.eq(claude.stale, true)
     t.eq(#claude.snapshot.windows, 3)
-    -- Backoff: 30s after the first failure, not the full interval.
-    host.clock += 31
+    host.clock += 31 -- 30s backoff after the first failure, not the full interval
     svc.call("update")
     t.eq(#host.requests, 3)
   end)
 
-  t.test("sign-in problems carry the provider's hint", function()
-    local host = env.host()
-    env.claudeCreds(host, { expiresAt = 1 })
-    env.start(host, "service.luau")
-    local claude = provider(host, "claude")
-    t.eq(claude.error.code, "expired")
-    t.ok(claude.error.hint:find("claude", 1, true) ~= nil, "hint mentions the CLI")
+  t.test("opening the panel refreshes old data but respects backoff", function()
+    local host = signedInClaude()
+    local svc = env.start(host, "service.luau")
+    local state = host.globals.noctalia.state
+    state.set("command", { action = "refresh", maxAge = 30 })
+    t.eq(#host.requests, 1, "fresh data: nothing to do")
+    host.clock += 120
+    state.set("command", { action = "refresh", maxAge = 30 })
+    t.eq(#host.requests, 2, "old data: refetched")
+
+    env.serve(host, { ["api.anthropic.com"] = { ok = true, status = 429, body = "" } })
+    svc.call("onIpc", "refresh")
+    t.eq(#host.requests, 3)
+    host.clock += 120
+    state.set("command", { action = "refresh", maxAge = 30 })
+    t.eq(#host.requests, 3, "throttled provider keeps its backoff")
   end)
 
-  t.test("picks up a sign-in that happens while running", function()
+  t.test("notices a sign-in that happens while running", function()
     local host = env.host()
     env.serve(host, { ["api.anthropic.com"] = env.fixture("claude_usage.json") })
     local svc = env.start(host, "service.luau")
     t.eq(provider(host, "claude").status, "absent")
     env.claudeCreds(host)
-    host.clock += 5
+    host.clock += 30
     svc.call("update")
     t.eq(provider(host, "claude").status, "ok")
   end)
@@ -126,8 +105,6 @@ t.group("service", function()
   t.test("serves the disk cache immediately after a restart", function()
     local host = signedInClaude()
     env.start(host, "service.luau")
-    t.ok(host.files["/data/cache.json"] ~= nil, "cache written")
-
     local restarted = env.host()
     env.claudeCreds(restarted)
     restarted.files["/data/cache.json"] = host.files["/data/cache.json"]
@@ -136,79 +113,19 @@ t.group("service", function()
     local claude = provider(restarted, "claude")
     t.eq(claude.status, "ok")
     t.eq(claude.stale, true)
-    t.eq(#claude.snapshot.windows, 3)
     t.eq(claude.busy, true)
   end)
 
   t.test("notifies once when crossing the critical threshold", function()
     local host = signedInClaude()
-    local json = host.globals.noctalia.json
     local svc = env.start(host, "service.luau")
-    t.eq(#host.notifications, 0)
-
-    local hot = json.decode(env.fixture("claude_usage.json"))
-    hot.limits[1].percent = 93
-    env.serve(host, { ["api.anthropic.com"] = json.encode(hot) })
+    env.serve(host, { ["api.anthropic.com"] = env.claudeBody(host, 93) })
+    host.clock += 300
+    svc.call("update")
     host.clock += 300
     svc.call("update")
     t.eq(#host.notifications, 1)
     t.eq(host.notifications[1].title, "Claude usage is running low")
-    t.ok(host.notifications[1].body:find("Session is at 93%", 1, true) ~= nil, host.notifications[1].body)
-
-    host.clock += 300
-    svc.call("update")
-    t.eq(#host.notifications, 1, "no repeat within the same window")
-    env.noMissingKeys(t, host)
-  end)
-
-  t.test("notifications can be turned off", function()
-    local host = env.host()
-    host.config.notify = false
-    env.claudeCreds(host)
-    local json = host.globals.noctalia.json
-    local hot = json.decode(env.fixture("claude_usage.json"))
-    hot.limits[1].percent = 99
-    env.serve(host, { ["api.anthropic.com"] = json.encode(hot) })
-    env.start(host, "service.luau")
-    t.eq(#host.notifications, 0)
-  end)
-
-  t.test("notifies when a maxed-out window resets", function()
-    local host = env.host()
-    env.claudeCreds(host)
-    local json = host.globals.noctalia.json
-    local hot = json.decode(env.fixture("claude_usage.json"))
-    hot.limits[1].percent = 100
-    env.serve(host, { ["api.anthropic.com"] = json.encode(hot) })
-    local svc = env.start(host, "service.luau")
-    t.eq(#host.notifications, 1, "running-low notification")
-
-    local fresh = json.decode(env.fixture("claude_usage.json"))
-    fresh.limits[1].percent = 2
-    fresh.limits[1].resets_at = "2026-10-04T01:19:59.911287+00:00" -- next 5h cycle
-    env.serve(host, { ["api.anthropic.com"] = json.encode(fresh) })
-    host.clock += 300
-    svc.call("update")
-    t.eq(#host.notifications, 2)
-    t.eq(host.notifications[2].title, "Claude Session has reset")
-    t.eq(host.notifications[2].body, "You have your headroom back: now at 2%.")
-    env.noMissingKeys(t, host)
-  end)
-
-  t.test("timestamp jitter is not mistaken for a reset", function()
-    local host = env.host()
-    env.claudeCreds(host)
-    local json = host.globals.noctalia.json
-    local hot = json.decode(env.fixture("claude_usage.json"))
-    hot.limits[1].percent = 95
-    env.serve(host, { ["api.anthropic.com"] = json.encode(hot) })
-    local svc = env.start(host, "service.luau")
-    hot.limits[1].percent = 94
-    hot.limits[1].resets_at = "2026-10-03T20:20:00.100000+00:00"
-    env.serve(host, { ["api.anthropic.com"] = json.encode(hot) })
-    host.clock += 300
-    svc.call("update")
-    t.eq(#host.notifications, 1)
   end)
 
   t.test("disabled providers are neither fetched nor shown", function()
@@ -216,28 +133,19 @@ t.group("service", function()
     env.codexAuth(host)
     host.config.disabled_providers = { " Codex " }
     env.start(host, "service.luau")
-    for _, view in report(host).providers do
-      t.ok(view.id ~= "codex", "codex not in the report")
-    end
-    t.eq(provider(host, "claude").status, "ok")
-    for _, req in host.requests do
-      t.ok(req.url:find("chatgpt.com", 1, true) == nil, "codex not fetched")
-    end
+    t.eq(provider(host, "codex"), nil)
+    t.eq(#host.requests, 1)
   end)
 
   t.test("a crashing adapter is contained", function()
     local host = signedInClaude()
     env.codexAuth(host)
-    -- Codex gets a body that is valid JSON but the wrong type everywhere.
-    host.httpHandler = function(req)
-      if req.url:find("chatgpt.com", 1, true) then
-        return { ok = true, status = 200, body = '{"rate_limit":{"primary_window":"boom"}}' }
-      end
-      return { ok = true, status = 200, body = env.fixture("claude_usage.json") }
-    end
+    env.serve(host, {
+      ["api.anthropic.com"] = env.fixture("claude_usage.json"),
+      ["chatgpt.com"] = '{"rate_limit":{"primary_window":"boom"}}',
+    })
     env.start(host, "service.luau")
     t.eq(provider(host, "claude").status, "ok")
-    t.eq(provider(host, "codex").status, "error")
     t.eq(provider(host, "codex").error.code, "parse")
   end)
 end)

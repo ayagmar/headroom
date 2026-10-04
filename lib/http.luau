@@ -12,14 +12,18 @@ local M = {}
 local E = model.ErrorCode
 
 -- Maps a transport result onto (data, nil) or (nil, ProviderError).
-function M.interpret(response, decode): (any, model.ProviderError?)
+-- `classify(status, body)` lets an adapter recognise its vendor's own error
+-- shapes (returning an ErrorCode) before the generic status mapping applies.
+function M.interpret(response, decode, classify): (any, model.ProviderError?)
   if response == nil or not response.ok then
     return nil, model.err(E.Network)
   end
   local status = response.status or 0
-  if status == 403 and string.find(response.body or "", "SUBSCRIPTION_REQUIRED", 1, true) then
-    -- Google's way of saying the plan, not the session, is the problem.
-    return nil, model.err(E.NoPlan, "HTTP 403")
+  if classify and (status < 200 or status >= 300) then
+    local code = classify(status, response.body or "")
+    if code then
+      return nil, model.err(code, `HTTP {status}`)
+    end
   end
   if status == 401 or status == 403 then
     return nil, model.err(E.Auth, `HTTP {status}`)
@@ -37,9 +41,9 @@ function M.interpret(response, decode): (any, model.ProviderError?)
   return data, nil
 end
 
-local function send(transport, decode, req, done)
+local function send(transport, decode, req, done, classify)
   local started = transport(req, function(response)
-    done(M.interpret(response, decode))
+    done(M.interpret(response, decode, classify))
   end)
   if started == false then
     done(nil, model.err(E.Network, "request not started"))
@@ -63,12 +67,12 @@ function M.client(transport, decode)
   end
 end
 
--- postJson(url, headers, body, done): like getJson, with a JSON request body.
+-- postJson(url, headers, body, done, classify?): like getJson, with a JSON body.
 function M.postClient(transport, decode)
-  return function(url: string, headers: { [string]: string }, body: string, done: (any, model.ProviderError?) -> ())
+  return function(url: string, headers: { [string]: string }, body: string, done: (any, model.ProviderError?) -> (), classify)
     local withType = table.clone(headers)
     withType["Content-Type"] = "application/json"
-    send(transport, decode, { url = url, method = "POST", headers = headerLines(withType), body = body }, done)
+    send(transport, decode, { url = url, method = "POST", headers = headerLines(withType), body = body }, done, classify)
   end
 end
 

@@ -28,11 +28,20 @@ local cardOptions = {
     else nil,
 }
 
+local function isRefreshing(): boolean
+  for _, provider in (if type(report) == "table" then report.providers else {}) do
+    if provider.busy then
+      return true
+    end
+  end
+  return false
+end
+
 local function subtitle(now: number): string
   if type(report) ~= "table" then
     return noctalia.tr("panel.starting")
-  elseif report.refreshing then
-    return noctalia.tr("panel.refreshing")
+  elseif isRefreshing() then
+    return noctalia.tr("status.refreshing")
   elseif report.lastRefreshAt then
     return noctalia.tr("panel.updated", { ago = time.ago(now - report.lastRefreshAt) })
   end
@@ -51,7 +60,7 @@ local function render()
   local connected, disconnected = {}, {}
   if type(report) == "table" and type(report.providers) == "table" then
     for _, provider in report.providers do
-      if provider.configured then
+      if provider.status ~= "absent" then
         table.insert(connected, cards.providerCard(provider, now, cardOptions))
       else
         table.insert(disconnected, cards.disconnectedRow(provider))
@@ -72,7 +81,7 @@ local function render()
     end
   end
 
-  local refreshing = type(report) == "table" and report.refreshing == true
+  local refreshing = isRefreshing()
 
   panel.render(ui.column({ flexGrow = 1, gap = 14 }, {
     ui.row({ align = "center", gap = 6 }, {
