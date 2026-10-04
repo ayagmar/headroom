@@ -29,7 +29,9 @@ if [[ $force -eq 0 && -n "$old" ]] && git rev-parse -q --verify "$old" >/dev/nul
   fi
 fi
 
-if ! noctalia msg plugins list 2>/dev/null | grep -q "^$PLUGIN_ID .* enabled"; then
+# Captured first: `grep -q` exits early, which pipefail would report as failure.
+installed="$(noctalia msg plugins list 2>/dev/null || true)"
+if ! grep -q "^$PLUGIN_ID .* enabled" <<<"$installed"; then
   exit 0 # installed but switched off: respect that
 fi
 
