@@ -51,6 +51,37 @@ t.group("claude", function()
     t.eq(#host.requests, 0)
   end)
 
+  t.test("expired -> Claude Code renews its own session, then we read it again", function()
+    local host, claude, ctx = env.provider("claude")
+    host.commands["claude"] = true
+    env.claudeCreds(host, { expiresAt = (host.clock - 60) * 1000 })
+    host.runHandler = function(argv)
+      if table.concat(argv, " ") == "claude -p /status --no-session-persistence" then
+        env.claudeCreds(host) -- what Claude Code does: a fresh token in its own file
+        return { exitCode = 0, stdout = "" }
+      end
+      return nil
+    end
+    env.serve(host, { ["api.anthropic.com"] = env.fixture("claude_usage.json") })
+    local snap, err = fetch(claude, ctx)
+    t.eq(err, nil)
+    t.eq(#snap.windows, 3)
+    t.eq(#host.spawned, 1)
+  end)
+
+  t.test("renewal that does not help: expired, and not retried within the cooldown", function()
+    local host, claude, ctx = env.provider("claude")
+    host.commands["claude"] = true
+    env.claudeCreds(host, { expiresAt = (host.clock - 60) * 1000 })
+    host.runHandler = function()
+      return { exitCode = 0, stdout = "" }
+    end
+    t.eq(select(2, fetch(claude, ctx)).code, "expired")
+    t.eq(select(2, fetch(claude, ctx)).code, "expired")
+    t.eq(#host.spawned, 1)
+    t.eq(#host.requests, 0)
+  end)
+
   t.test("honors CLAUDE_CONFIG_DIR", function()
     local host, claude, ctx = env.provider("claude")
     host.env.CLAUDE_CONFIG_DIR = "/work/claude"

@@ -16,9 +16,18 @@ end
 
 local RANK = { ok = 0, warn = 1, critical = 2 }
 
+-- A window whose reset time has passed carries last cycle's numbers: they say
+-- nothing about now, so surfaces show it as unknown until fresh data lands.
+function M.isPastReset(window, now: number?): boolean
+  return window.resetsAt ~= nil and window.resetsAt <= (now or M.now())
+end
+
 -- Usage severity, raised by the forecast: a window at 60% that will lock you
 -- out for hours deserves the warning color now.
 function M.severity(window, now: number): string
+  if M.isPastReset(window, now) then
+    return "ok"
+  end
   local warn, critical = state.thresholds()
   local severity = model.severity(window.usedPercent, warn, critical)
   local p = pace.compute(window, now)
@@ -41,6 +50,9 @@ end
 
 -- The number shown for a window, 0..100, in the configured direction.
 function M.shownPercent(window): number
+  if M.isPastReset(window) then
+    return 0 -- unknown: an empty meter, not last cycle's value
+  end
   return if M.showsRemaining() then 100 - window.usedPercent else window.usedPercent
 end
 
@@ -58,6 +70,9 @@ end
 
 -- "38%". With `labelled`, says which side it is: "38% used" / "62% left".
 function M.percent(window, labelled: boolean?): string
+  if M.isPastReset(window) then
+    return "—"
+  end
   local value = M.roundPercent(M.shownPercent(window))
   if not labelled then
     return `{value}%`

@@ -9,8 +9,8 @@
 -- Google access tokens live for an hour and only Antigravity can renew them, so
 -- an expired session is handed back to Antigravity: we run `agy models` (the
 -- lightest authenticated command; no prompt, no TTY), which makes agy refresh
--- its own keyring entry, then read it again. At most once per RENEW_COOLDOWN,
--- so a dead session does not spawn agy on every refresh.
+-- its own keyring entry, then read it again (lib/renew: at most once per 10
+-- minutes, so a dead session does not spawn agy on every refresh).
 --
 -- Endpoints: POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary,
 -- and :loadCodeAssist for the plan name (at most every 6 hours). Undocumented. It only answers clients that
@@ -22,6 +22,7 @@ local provider = require("../../lib/provider.luau")
 local model = require("../../lib/model.luau")
 local time = require("../../lib/time.luau")
 local jwt = require("../../lib/jwt.luau")
+local renew = require("../../lib/renew.luau")
 
 local E = model.ErrorCode
 
@@ -32,8 +33,6 @@ local PLAN_TTL = 6 * 3600
 local QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
 local SESSION_SECONDS = model.SESSION_SECONDS
 local WEEK_SECONDS = model.WEEK_SECONDS
-local RENEW_COOLDOWN = 600
-local RENEW_TIMEOUT_MS = 30000
 
 local KEYRING_LOOKUP = { "secret-tool", "lookup", "service", "gemini", "username", "antigravity" }
 local TOKEN_FILE = "~/.gemini/antigravity-cli/antigravity-oauth-token"
@@ -41,7 +40,7 @@ local CLI_SETTINGS = "~/.gemini/antigravity-cli/settings.json"
 local LOCAL_AGY = "~/.local/bin/agy"
 
 -- Module state lives as long as the service.
-local lastRenewAt = -math.huge
+local renewSession = renew.new(600, 30000)
 -- A failed lookup may mean a locked keyring, and asking again could raise an
 -- unlock prompt on every refresh. So after a failure the keyring rests for
 -- KEYRING_BACKOFF and only the token file is read.
@@ -103,11 +102,7 @@ local function readSession(ctx, done: (Session?) -> ())
 end
 
 local function agyCommand(ctx): string?
-  if ctx.which("agy") then
-    return "agy"
-  end
-  local local_ = ctx.expandPath(LOCAL_AGY)
-  return if ctx.fileExists(local_) then local_ else nil
+  return renew.findCommand(ctx, "agy", { LOCAL_AGY })
 end
 
 local function isFresh(session: Session?, now: number): boolean
@@ -115,19 +110,15 @@ local function isFresh(session: Session?, now: number): boolean
 end
 
 -- Asks agy to renew its own session; done(true) when it ran successfully.
-local function renew(ctx, done: (boolean) -> ())
+-- `env` sets one variable for this run only: agy otherwise may launch its
+-- background updater.
+local function renewWithAgy(ctx, done: (boolean) -> ())
   local agy = agyCommand(ctx)
-  local now = ctx.now()
-  if agy == nil or now - lastRenewAt < RENEW_COOLDOWN then
+  if agy == nil then
     done(false)
     return
   end
-  lastRenewAt = now
-  -- `env` sets one variable for this run only: agy otherwise may launch its
-  -- background updater.
-  ctx.run({ "env", "AGY_CLI_DISABLE_AUTO_UPDATE=true", agy, "models" }, RENEW_TIMEOUT_MS, function(result)
-    done(result ~= nil and result.exitCode == 0)
-  end)
+  renewSession(ctx, { "env", "AGY_CLI_DISABLE_AUTO_UPDATE=true", agy, "models" }, done)
 end
 
 local function groupLabel(name: any): string
@@ -262,7 +253,7 @@ return provider.define({
       elseif isFresh(session, ctx.now()) then
         query(ctx, session, done)
       else
-        renew(ctx, function(renewed)
+        renewWithAgy(ctx, function(renewed)
           if not renewed then
             done(nil, model.err(E.Expired))
             return

@@ -3,21 +3,28 @@
 --
 -- Credentials: the OAuth session Claude Code stores in
 --   $CLAUDE_CONFIG_DIR/.credentials.json   (default ~/.claude/.credentials.json)
--- read-only. Headroom never refreshes or rewrites the token: refresh tokens
--- rotate, and spending one here would sign Claude Code out. When the access
--- token has expired we say so and Claude Code renews it on its next run.
+-- read-only. Headroom never refreshes or rewrites the token itself: refresh
+-- tokens rotate, and spending one here could sign Claude Code out. When the
+-- access token has expired, Claude Code renews it: we run
+--   claude -p /status --no-session-persistence
+-- which starts the CLI's sign-in check (renewing and saving the session), makes
+-- no model call and keeps no transcript, then read the credentials again.
 --
 -- Endpoint: GET https://api.anthropic.com/api/oauth/usage, the one Claude Code's
 -- own /usage screen reads. It is not a documented public API, so parsing is
 -- defensive: every field of the `limits` array is treated as optional.
 
 local provider = require("../../lib/provider.luau")
+local renew = require("../../lib/renew.luau")
 local model = require("../../lib/model.luau")
 local time = require("../../lib/time.luau")
 
 local E = model.ErrorCode
 
 local USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+local RENEW_ARGS = { "-p", "/status", "--no-session-persistence" }
+local CLAUDE_FALLBACKS = { "~/.local/bin/claude", "~/.claude/local/claude" }
+local renewSession = renew.new(10 * 60, 30000)
 local SESSION_SECONDS = model.SESSION_SECONDS
 local WEEK_SECONDS = model.WEEK_SECONDS
 
@@ -176,21 +183,37 @@ return provider.define({
   end,
 
   fetch = function(ctx, done)
+    local function query(oauth)
+      ctx.getJson(USAGE_URL, {
+        ["Authorization"] = `Bearer {oauth.accessToken}`,
+        ["anthropic-beta"] = "oauth-2025-04-20",
+        ["User-Agent"] = ctx.userAgent,
+      }, function(data, httpErr)
+        if httpErr then
+          done(nil, httpErr)
+          return
+        end
+        done(parse(data, oauth, ctx))
+      end)
+    end
+
     local oauth, err = readOauth(ctx)
-    if err then
+    if err == nil then
+      query(oauth)
+      return
+    end
+    local claude = if err.code == E.Expired then renew.findCommand(ctx, "claude", CLAUDE_FALLBACKS) else nil
+    if claude == nil then
       done(nil, err)
       return
     end
-    ctx.getJson(USAGE_URL, {
-      ["Authorization"] = `Bearer {oauth.accessToken}`,
-      ["anthropic-beta"] = "oauth-2025-04-20",
-      ["User-Agent"] = ctx.userAgent,
-    }, function(data, httpErr)
-      if httpErr then
-        done(nil, httpErr)
-        return
+    renewSession(ctx, { claude, table.unpack(RENEW_ARGS) }, function()
+      local renewed, stillErr = readOauth(ctx)
+      if stillErr then
+        done(nil, stillErr)
+      else
+        query(renewed)
       end
-      done(parse(data, oauth, ctx))
     end)
   end,
 

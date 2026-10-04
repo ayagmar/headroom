@@ -42,7 +42,7 @@ local function itemNodes(item, vertical: boolean, style: string, now: number)
     -- At the limit the percentage says nothing new; when you get it back does.
     local exhausted = window.limitReached and window.resetsAt ~= nil and window.resetsAt > now
     local text = if exhausted then time.duration(window.resetsAt - now)
-      elseif vertical then view.roundPercent(view.shownPercent(window))
+      elseif vertical and not view.isPastReset(window, now) then view.roundPercent(view.shownPercent(window))
       else view.percent(window)
     table.insert(nodes, ui.label({
       text = text,

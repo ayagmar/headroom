@@ -30,8 +30,8 @@ local LOCKOUT_WARN_FRACTION = 0.1
 function M.compute(window, now: number): Pace?
   local period = window.periodSeconds
   local resetsAt = window.resetsAt
-  if period == nil or resetsAt == nil or period <= 0 then
-    return nil
+  if period == nil or resetsAt == nil or period <= 0 or resetsAt <= now then
+    return nil -- no forecast for a window that has already reset
   end
   local remaining = math.clamp(resetsAt - now, 0, period)
   local elapsed = period - remaining

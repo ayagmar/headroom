@@ -16,7 +16,9 @@ Headroom reuses the sign-in your CLIs already have. It needs no API keys and ins
 ## Requirements
 
 - **Claude**: sign in to [Claude Code](https://claude.com/claude-code) with a Pro, Max, Team or Enterprise plan.
-  Headroom reads `~/.claude/.credentials.json` (or `$CLAUDE_CONFIG_DIR/.credentials.json`).
+  Headroom reads `~/.claude/.credentials.json` (or `$CLAUDE_CONFIG_DIR/.credentials.json`). When the session has
+  expired, Headroom runs `claude -p /status --no-session-persistence` so Claude Code renews its own session. That
+  command makes no model call, uses none of your quota and keeps no transcript.
 - **Codex**: sign in to the [Codex CLI](https://github.com/openai/codex) with ChatGPT (`codex login`). Headroom reads
   `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`). An API-key-only setup has no plan limits to show.
 - **Antigravity**: sign in to the `agy` CLI or an Antigravity app with Google. Headroom reads the session Antigravity
@@ -123,8 +125,8 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
 
   Each vendor's own tools read these same endpoints. Headroom identifies itself as `headroom-noctalia/<version>`,
   except to Antigravity's endpoint, which only answers the `antigravity` User-Agent. It honors `shell.offline_mode`.
-- **Credentials are read-only.** Headroom never refreshes, rewrites or copies a token. Antigravity's session is
-  renewed by `agy` itself, never by Headroom. Both vendors rotate refresh
+- **Credentials are read-only.** Headroom never refreshes, rewrites or copies a token. An expired session is
+  renewed by the vendor's own CLI (`claude`, `agy`), never by Headroom. Both vendors rotate refresh
   tokens, so spending one here would sign your CLI out. When a session expires, the card says so, and running the CLI
   once renews it. Headroom picks up the new session within a minute.
 - **Files written.** Everything goes in the plugin data directory (`~/.local/state/noctalia/plugins/data/ayagmar/headroom/`):
@@ -132,6 +134,7 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
   - `icons/` and `rings/`: small theme-tinted SVGs.
 - **Processes.** Every command runs directly from an argument list, with no shell:
   - `xdg-open <usage page URL>`, when you click a card's link button.
+  - `claude -p /status --no-session-persistence`, when the Claude session has expired, at most every 10 minutes.
   - `secret-tool lookup service gemini username antigravity`, to read Antigravity's session. After a failed lookup
     (for example a locked keyring), Headroom waits 30 minutes before asking again, so it never keeps raising unlock
     prompts.
