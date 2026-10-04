@@ -43,6 +43,7 @@ gauge and the usage of the window closest to its limit.
 - **Left click** opens the panel.
 - **Right click** refreshes now. The binding is `plugin ayagmar/headroom:poller all refresh`, and you can rebind it in
   the widget's settings.
+- **Middle click** opens Headroom's settings.
 - **Hover** shows every displayed window with its usage, reset time and forecast.
 
 The panel shows one card per provider, with every window (for example Session, Weekly, or Weekly · Opus) as a usage
@@ -67,33 +68,44 @@ noctalia msg panel-toggle ayagmar/headroom:panel
 
 ## Settings
 
-Plugin settings (Settings → Plugins → Headroom):
+All settings are on one page (Settings → Plugins → Headroom, or middle-click the capsule). They are grouped by
+prefix: **Bar**, **Display**, **Alerts** and **Data**.
+
+**Bar**
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `display` | `select` | `used` | `used` or `remaining`: which side of the limit percentages, rings and meters show. Colors and warnings always follow usage. |
-| `refresh_minutes` | `int` | `5` | Minutes between fetches for each provider (1–120). Failures retry sooner with backoff. Throttling waits longer. |
-| `warn_percent` | `int` | `70` | Usage at or above this percentage uses the warning color. |
-| `critical_percent` | `int` | `90` | Usage at or above this percentage uses the error color and triggers a notification. |
-| `notify` | `bool` | `true` | Sends one notification per window per reset cycle when usage crosses `critical_percent`. |
-| `notify_reset` | `bool` | `true` | Sends a notification when a window that reached `critical_percent` resets, so you know your headroom is back. |
-| `pace_colors` | `bool` | `true` | Uses the warning color when a window is on course to be locked out for at least 10% of its length before it resets. |
-| `brand_colors` | `bool` | `true` | Colors healthy meters with each provider's brand color. Turn it off to use the theme's primary color. |
-| `disabled_providers` | `string_list` | `[]` | Advanced. Provider ids to ignore entirely (`claude`, `codex`, `antigravity`). A listed provider is never fetched and never shown. |
-
-Widget settings (per bar capsule):
-
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
-| `provider` | `select` | `all` | `all` shows every signed-in provider. `claude`, `codex` or `antigravity` pins one provider. |
-| `max_providers` | `int` | `3` | The most providers this capsule shows (1–8). When more are signed in, the ones closest to their limits are shown, with the forecast counted. |
-| `window` | `select` | `tightest` | Which window to show: the one `tightest` (closest to its limit), the 5-hour `session`, or `weekly`. |
+| `provider` | `select` | `all` | `all` shows every signed-in provider. `claude`, `codex` or `antigravity` pins one. |
+| `max_providers` | `int` | `3` | The most providers the bar shows (1–8). When more are signed in, the ones closest to their limits are shown, with the forecast counted. |
+| `window` | `select` | `tightest` | Which window to show: `tightest` (closest to its limit), the 5-hour `session`, or `weekly`. |
 | `show_logo` | `bool` | `true` | Show the provider logo. |
 | `show_ring` | `bool` | `true` | Show the ring gauge. |
 | `show_value` | `bool` | `true` | Show the percentage (a bare number on vertical bars). |
 | `show_countdown` | `bool` | `false` | Show the time until the window resets (horizontal bars only). |
 
-To track two providers in different places, add two capsules and set each one's `provider`.
+**Display**
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `display` | `select` | `used` | `used` or `remaining`: which side of the limit percentages, rings and meters show. Colors and warnings always follow usage. |
+| `warn_percent` | `int` | `70` | Usage at or above this percentage uses the warning color. |
+| `critical_percent` | `int` | `90` | Usage at or above this percentage uses the error color and can notify you. |
+| `pace_colors` | `bool` | `true` | Uses the warning color when a window is on course to be locked out for at least 10% of its length before it resets. |
+| `brand_colors` | `bool` | `true` | Colors healthy meters with each provider's brand color. Turn it off to use the theme's primary color. |
+
+**Alerts**
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `notify` | `bool` | `true` | Sends one notification per window per reset cycle when usage crosses `critical_percent`. |
+| `notify_reset` | `bool` | `true` | Sends a notification when a window that reached `critical_percent` resets. |
+
+**Data**
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `refresh_minutes` | `int` | `5` | Minutes between fetches for each provider (1–120). Failures retry sooner with backoff. Throttling waits longer. |
+| `disabled_providers` | `string_list` | `[]` | Advanced. Provider ids to ignore entirely (`claude`, `codex`, `antigravity`). A listed provider is never fetched and never shown. |
 
 ## IPC
 

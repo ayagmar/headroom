@@ -60,7 +60,7 @@ local function itemNodes(item, vertical: boolean)
     if exhausted then
       text = time.duration(window.resetsAt - now)
     elseif vertical then
-      text = tostring(math.floor(view.shownPercent(window) + 0.5))
+      text = view.roundPercent(view.shownPercent(window))
     else
       text = view.percent(window)
     end

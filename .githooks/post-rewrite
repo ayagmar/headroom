@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# git pull --rebase / git rebase: compare with where the branch was before.
+[[ "${1:-}" == "rebase" ]] || exit 0
+exec "$(git rev-parse --show-toplevel)/scripts/reload.sh" ORIG_HEAD HEAD

@@ -46,9 +46,20 @@ function M.shownPercent(window): number
   return if M.showsRemaining() then 100 - window.usedPercent else window.usedPercent
 end
 
+-- Whole percent, except that rounding never erases a difference: 0.4 is
+-- "<1", 99.6 is ">99". A meter at "100% left" after real use reads as broken.
+function M.roundPercent(value: number): string
+  if value > 0 and value < 1 then
+    return "<1"
+  elseif value > 99 and value < 100 then
+    return ">99"
+  end
+  return tostring(math.floor(value + 0.5))
+end
+
 -- "38%". With `labelled`, says which side it is: "38% used" / "62% left".
 function M.percent(window, labelled: boolean?): string
-  local value = math.floor(M.shownPercent(window) + 0.5)
+  local value = M.roundPercent(M.shownPercent(window))
   if not labelled then
     return `{value}%`
   end

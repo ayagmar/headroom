@@ -280,4 +280,15 @@ t.group("context", function()
   end)
 end)
 
+t.group("view", function()
+  t.test("rounding never erases a difference", function()
+    local view = mods.require("lib/view.luau")
+    t.eq(view.roundPercent(0), "0")
+    t.eq(view.roundPercent(0.4), "<1")
+    t.eq(view.roundPercent(38.5), "39")
+    t.eq(view.roundPercent(99.6), ">99")
+    t.eq(view.roundPercent(100), "100")
+  end)
+end)
+
 return true

@@ -69,15 +69,18 @@ The bar and the panel need no changes.
 ## Development
 
 ```sh
-ln -sfn "$PWD" ~/.local/share/noctalia/plugins/headroom
-noctalia msg plugins enable ayagmar/headroom
-noctalia msg panel-toggle ayagmar/headroom:panel
+scripts/dev-install.sh   # once: link into Noctalia, enable, install git hooks
 ```
 
-`.luau` edits hot-reload. For edits to `plugin.toml` or `translations/en.json`, run
-`noctalia msg plugins disable ayagmar/headroom && noctalia msg plugins enable ayagmar/headroom`
-(`config-reload` alone does not re-read them). Logs are in `~/.cache/noctalia/noctalia.log`
-(`grep headroom`).
+After that, the checkout is the installed plugin:
+
+- `.luau` edits hot-reload.
+- `git pull`, `git checkout` and `git rebase` run `scripts/reload.sh` through `.githooks/`. It re-enables the plugin
+  when `plugin.toml` or `translations/` changed, because those are only read at enable time and
+  `noctalia msg config-reload` does not re-read them.
+- `scripts/reload.sh --force` does the same by hand after editing either one.
+
+Logs are in `~/.cache/noctalia/noctalia.log` (`grep headroom`).
 
 ```sh
 scripts/test.sh        # unit + integration tests against a fake host (fetches the Luau CLI on first run)

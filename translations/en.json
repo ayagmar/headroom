@@ -113,19 +113,19 @@
   "settings": {
     "brand_colors": {
       "description": "Color healthy meters with each provider's brand color instead of the theme's primary color.",
-      "label": "Brand colors"
+      "label": "Display · Brand colors"
     },
     "critical_percent": {
-      "description": "Usage at or above this percentage is shown in the error color and triggers a notification.",
-      "label": "Critical at (%)"
+      "description": "Usage at or above this percentage is shown in the error color and can notify you.",
+      "label": "Display · Critical at (%)"
     },
     "disabled_providers": {
       "description": "Provider ids Headroom ignores entirely: never fetched, never shown. Available: claude, codex, antigravity.",
-      "label": "Disabled providers"
+      "label": "Data · Disabled providers"
     },
     "display": {
       "description": "Whether percentages and meters show how much you've used or how much is left. Colors and warnings always follow usage.",
-      "label": "Show",
+      "label": "Display · Show",
       "option": {
         "remaining": "Remaining",
         "used": "Used"
@@ -133,23 +133,23 @@
     },
     "max_providers": {
       "description": "How many providers this capsule shows at most. When more are signed in, the ones closest to their limits win.",
-      "label": "Maximum providers"
+      "label": "Bar · Maximum providers"
     },
     "notify": {
       "description": "Notify once per window when usage crosses the critical threshold.",
-      "label": "Low headroom notifications"
+      "label": "Alerts · Running low"
     },
     "notify_reset": {
-      "description": "Notify when a window that reached the critical threshold resets.",
-      "label": "Reset notifications"
+      "description": "Notify when a window that reached the critical threshold resets, so you know you're back.",
+      "label": "Alerts · Window reset"
     },
     "pace_colors": {
       "description": "Use the warning color when a window is on course to run out well before it resets, even below the warning threshold.",
-      "label": "Forecast colors"
+      "label": "Display · Forecast colors"
     },
     "provider": {
-      "description": "Which providers this capsule shows.",
-      "label": "Providers",
+      "description": "Which providers the bar shows. Pick one to pin it.",
+      "label": "Bar · Providers",
       "option": {
         "all": "All signed-in providers",
         "antigravity": "Antigravity",
@@ -159,28 +159,28 @@
     },
     "refresh_minutes": {
       "description": "How often to fetch usage from each provider, in minutes. Failures retry sooner with backoff.",
-      "label": "Refresh interval (min)"
+      "label": "Data · Refresh interval (min)"
     },
     "show_countdown": {
       "description": "Show the time until the displayed window resets next to the percentage (horizontal bars only).",
-      "label": "Show reset countdown"
+      "label": "Bar · Show reset countdown"
     },
     "show_logo": {
-      "label": "Show provider logo"
+      "label": "Bar · Show logo"
     },
     "show_ring": {
-      "label": "Show ring gauge"
+      "label": "Bar · Show ring gauge"
     },
     "show_value": {
-      "label": "Show percentage"
+      "label": "Bar · Show percentage"
     },
     "warn_percent": {
       "description": "Usage at or above this percentage is shown in the warning color.",
-      "label": "Warning at (%)"
+      "label": "Display · Warning at (%)"
     },
     "window": {
-      "description": "Which usage window the capsule shows for each provider.",
-      "label": "Window",
+      "description": "Which usage window the bar shows for each provider.",
+      "label": "Bar · Window",
       "option": {
         "session": "Session (5-hour)",
         "tightest": "Closest to limit",

@@ -12,8 +12,9 @@
 -- its own keyring entry, then read it again. At most once per RENEW_COOLDOWN,
 -- so a dead session does not spawn agy on every refresh.
 --
--- Endpoint: POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary
--- (daily-cloudcode-pa as fallback). Undocumented. It only answers clients that
+-- Endpoints: POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary
+-- (daily-cloudcode-pa as fallback), and :loadCodeAssist for the plan name
+-- (at most every 6 hours). Undocumented. It only answers clients that
 -- identify as Antigravity, so this adapter's User-Agent is "antigravity"
 -- rather than Headroom's own. Plans without Antigravity quota get 403
 -- SUBSCRIPTION_REQUIRED, reported as no_plan rather than as a sign-in problem.
@@ -25,6 +26,10 @@ local jwt = require("../../lib/jwt.luau")
 
 local E = model.ErrorCode
 
+local CODE_ASSIST_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
+local CLIENT_METADATA = '{"metadata":{"ideType":"ANTIGRAVITY","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}}'
+-- The plan changes rarely; ask for it at most this often.
+local PLAN_TTL = 6 * 3600
 local QUOTA_URLS = {
   "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
   "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
@@ -48,6 +53,7 @@ local lastRenewAt = -math.huge
 -- KEYRING_BACKOFF and only the token file is read.
 local KEYRING_BACKOFF = 30 * 60
 local keyringFailedAt = -math.huge
+local planCache: { value: string?, at: number } = { value = nil, at = -math.huge }
 
 type Session = { accessToken: string, expiresAt: number? }
 
@@ -183,11 +189,48 @@ local function parse(data, ctx): (model.Snapshot?, model.ProviderError?)
   return model.snapshot({ plan = nil, windows = windows, notes = {}, fetchedAt = ctx.now() }), nil
 end
 
+-- "Google AI Pro" from loadCodeAssist; paidTier wins over currentTier, which
+-- reads "free-tier" even for paid Google AI accounts.
+local function planFrom(data): string?
+  for _, key in { "paidTier", "currentTier" } do
+    local tier = data[key]
+    if type(tier) == "table" and type(tier.name) == "string" and tier.name ~= "" then
+      return tier.name
+    end
+  end
+  return nil
+end
+
+-- Best effort: a failure leaves the plan unknown and never fails the fetch.
+local function withPlan(ctx, headers, done: (string?) -> ())
+  if ctx.now() - planCache.at < PLAN_TTL then
+    done(planCache.value)
+    return
+  end
+  ctx.postJson(CODE_ASSIST_URL, headers, CLIENT_METADATA, function(data, err)
+    if err == nil then
+      planCache = { value = planFrom(data), at = ctx.now() }
+    end
+    done(planCache.value)
+  end)
+end
+
 local function query(ctx, session: Session, done)
   local headers = {
     ["Authorization"] = `Bearer {session.accessToken}`,
     ["User-Agent"] = "antigravity", -- required by the endpoint; see header comment
   }
+  local finish = done
+  done = function(snapshot, err)
+    if snapshot == nil then
+      finish(nil, err)
+      return
+    end
+    withPlan(ctx, headers, function(plan)
+      snapshot.plan = plan
+      finish(snapshot, nil)
+    end)
+  end
   local function attempt(index: number)
     ctx.postJson(QUOTA_URLS[index], headers, "{}", function(data, err)
       local retryable = err and (err.code == E.Network or err.code == E.Server)
@@ -253,5 +296,6 @@ return provider.define({
   resetRenewCooldown = function()
     lastRenewAt = -math.huge
     keyringFailedAt = -math.huge
+    planCache = { value = nil, at = -math.huge }
   end,
 })

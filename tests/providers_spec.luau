@@ -390,7 +390,40 @@ t.group("antigravity", function()
     local snap, err = fetch(p, c)
     t.eq(err, nil)
     t.eq(#snap.windows, 4)
-    t.eq(#h.requests, 2)
+    local quotaCalls = 0
+    for _, req in h.requests do
+      if req.url:find("retrieveUserQuotaSummary", 1, true) then
+        quotaCalls += 1
+      end
+    end
+    t.eq(quotaCalls, 2)
+  end)
+
+  t.test("plan comes from loadCodeAssist, cached, and never fails the fetch", function()
+    local h, p, c = setup({ keyring = session(FRESH) })
+    h.httpHandler = function(req)
+      if req.url:find("loadCodeAssist", 1, true) then
+        return { ok = true, status = 200, body = '{"currentTier":{"id":"free-tier","name":"Antigravity"},"paidTier":{"name":"Google AI Pro"}}' }
+      end
+      return { ok = true, status = 200, body = env.fixture("antigravity_quota.json") }
+    end
+    local snap = fetch(p, c)
+    t.eq(snap.plan, "Google AI Pro")
+    local before = #h.requests
+    fetch(p, c)
+    t.eq(#h.requests, before + 1, "plan cached: only the quota call")
+
+    local h2, p2, c2 = setup({ keyring = session(FRESH) })
+    h2.httpHandler = function(req)
+      if req.url:find("loadCodeAssist", 1, true) then
+        return { ok = true, status = 500, body = "" }
+      end
+      return { ok = true, status = 200, body = env.fixture("antigravity_quota.json") }
+    end
+    local snap2, err2 = fetch(p2, c2)
+    t.eq(err2, nil)
+    t.eq(snap2.plan, nil)
+    t.ok(h ~= nil)
   end)
 end)
 
