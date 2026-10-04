@@ -44,20 +44,39 @@ t.group("bar", function()
     env.noMissingKeys(t, host)
   end)
 
-  t.test("tooltip lists window, value and reset", function()
+  t.test("tooltip uses one short row per fact", function()
     local host = running()
+    host.clock = 1791100799 - 2 * 86400 -- Claude weekly 5/7 elapsed: has a forecast
     env.start(host, "bar.luau")
-    t.eq(#host.tooltip, 2)
-    t.eq(host.tooltip[1].key, "Claude · Weekly")
-    t.ok(host.tooltip[1].value:find("^47%% · Resets in ") ~= nil, host.tooltip[1].value)
+    local rows = host.tooltip
+    t.eq(rows[1].key, "Claude · Weekly")
+    t.eq(rows[1].value, "47% used")
+    t.eq(rows[2].key, "Resets")
+    t.eq(rows[2].value, "2d · Sun 07:59")
+    t.eq(rows[3].key, "Forecast")
+    t.eq(rows[3].value, "≈ 66% by reset")
+    for _, row in rows do
+      t.ok(#row.value <= 24, `short value: {row.value}`)
+    end
   end)
 
-  t.test("auto shows only the provider closest to its limit", function()
-    local host = running({ claudeSession = 88, config = { provider = "auto" } })
+  t.test("max_providers keeps the most urgent, in registry order", function()
+    local host = running({ claudeSession = 88, config = { max_providers = 1 } })
     env.start(host, "bar.luau")
     local texts = env.texts(host.barTree)
     t.eq(#texts, 1)
     t.eq(texts[1], "88%")
+  end)
+
+  t.test("remaining mode inverts numbers and rings, not colors", function()
+    local host = running({ claudeSession = 95, config = { provider = "claude", window = "session", display = "remaining" } })
+    env.start(host, "bar.luau")
+    local label = env.find(host.barTree, function(n) return n.type == "label" end)[1]
+    t.eq(label.props.text, "5%")
+    t.eq(label.props.color, "error", "severity still follows usage")
+    local ring = env.find(host.barTree, function(n) return n.type == "image" end)[2]
+    t.ok(ring.props.path:find("ring%-5%-") ~= nil, ring.props.path)
+    t.eq(host.tooltip[1].value, "5% left")
   end)
 
   t.test("window preference and severity colors", function()
@@ -81,7 +100,7 @@ t.group("bar", function()
     env.start(host, "service.luau")
     env.start(host, "bar.luau")
     t.eq(env.find(host.barTree, function(n) return n.type == "glyph" end)[1].props.name, "gauge")
-    t.eq(host.tooltip, "Headroom: no Claude or Codex sign-in found")
+    t.eq(host.tooltip, "Headroom: no Claude, Codex or Antigravity sign-in found")
   end)
 
   t.test("forecast raises the color before the threshold", function()
@@ -92,7 +111,7 @@ t.group("bar", function()
     local label = env.find(host.barTree, function(n) return n.type == "label" end)[1]
     t.eq(label.props.text, "60%")
     t.eq(label.props.color, "#f2b84b")
-    t.ok(host.tooltip[1].value:find("Runs out in 1h 20m", 1, true) ~= nil, host.tooltip[1].value)
+    t.eq(host.tooltip[3].value, "Runs out in 1h 20m")
   end)
 
   t.test("forecast colors can be turned off", function()
@@ -218,6 +237,17 @@ t.group("panel", function()
     local texts = env.texts(host.panelTree)
     t.contains(texts, "Resets in 2d · Sun 07:59")
     t.contains(texts, "≈ 22% by reset") -- Fable: 16% after 5/7 of the week
+    env.noMissingKeys(t, host)
+  end)
+
+  t.test("remaining mode labels the panel too", function()
+    local host = running({ config = { display = "remaining" } })
+    host.clock = 1791100799 - 2 * 86400
+    local panel = env.start(host, "panel.luau")
+    panel.call("onOpen", "")
+    local texts = env.texts(host.panelTree)
+    t.contains(texts, "62% left") -- Claude session at 38% used
+    t.contains(texts, "≈ 34% left at reset")
     env.noMissingKeys(t, host)
   end)
 

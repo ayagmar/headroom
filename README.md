@@ -1,6 +1,6 @@
 # Headroom
 
-See how much of your Claude and Codex subscription limits you have left without leaving your desktop. The bar shows
+See how much of your Claude, Codex and Antigravity plan limits you have left without leaving your desktop. The bar shows
 each provider's tightest window as a ring and a percentage. The panel shows every window with its reset countdown and
 a pace check that says whether you will run out before the reset.
 
@@ -19,11 +19,17 @@ Headroom reuses the sign-in your CLIs already have. It needs no API keys and ins
   Headroom reads `~/.claude/.credentials.json` (or `$CLAUDE_CONFIG_DIR/.credentials.json`).
 - **Codex**: sign in to the [Codex CLI](https://github.com/openai/codex) with ChatGPT (`codex login`). Headroom reads
   `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`). An API-key-only setup has no plan limits to show.
+- **Antigravity**: sign in to the `agy` CLI or an Antigravity app with Google. Headroom reads the session Antigravity
+  saved in your keyring through `secret-tool` (from libsecret), or `~/.gemini/antigravity-cli/antigravity-oauth-token`.
+  Google sessions expire after an hour. When that happens Headroom runs `agy models` so agy renews its own session.
+  That requires `agy` on `PATH` or in `~/.local/bin`, and Headroom does it at most once every 10 minutes. Accounts
+  whose plan has no Antigravity quota show *No quota on this plan*.
 
 Headroom detects each provider when its sign-in file is present. Providers that are not signed in stay out of the bar.
 
-`xdg-open` is optional. It is used only by the panel's "open usage page" buttons, which are hidden when it is not
-installed.
+Both dependencies are optional:
+- `xdg-open` is used only by the panel's "open usage page" buttons, which are hidden when it is not installed.
+- `secret-tool` is used only for Antigravity's keyring session.
 
 ## Usage
 
@@ -65,6 +71,7 @@ Plugin settings (Settings → Plugins → Headroom):
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
+| `display` | `select` | `used` | `used` or `remaining`: which side of the limit percentages, rings and meters show. Colors and warnings always follow usage. |
 | `refresh_minutes` | `int` | `5` | Minutes between fetches for each provider (1–120). Failures retry sooner with backoff. Throttling waits longer. |
 | `warn_percent` | `int` | `70` | Usage at or above this percentage uses the warning color. |
 | `critical_percent` | `int` | `90` | Usage at or above this percentage uses the error color and triggers a notification. |
@@ -72,13 +79,14 @@ Plugin settings (Settings → Plugins → Headroom):
 | `notify_reset` | `bool` | `true` | Sends a notification when a window that reached `critical_percent` resets, so you know your headroom is back. |
 | `pace_colors` | `bool` | `true` | Uses the warning color when a window is on course to be locked out for at least 10% of its length before it resets. |
 | `brand_colors` | `bool` | `true` | Colors healthy meters with each provider's brand color. Turn it off to use the theme's primary color. |
-| `disabled_providers` | `string_list` | `[]` | Advanced. Provider ids to ignore entirely (`claude`, `codex`). A listed provider is never fetched and never shown. |
+| `disabled_providers` | `string_list` | `[]` | Advanced. Provider ids to ignore entirely (`claude`, `codex`, `antigravity`). A listed provider is never fetched and never shown. |
 
 Widget settings (per bar capsule):
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `provider` | `select` | `all` | `all` shows every signed-in provider. `auto` shows only the one closest to its limit. `claude` or `codex` pins one provider. |
+| `provider` | `select` | `all` | `all` shows every signed-in provider. `claude`, `codex` or `antigravity` pins one provider. |
+| `max_providers` | `int` | `3` | The most providers this capsule shows (1–8). When more are signed in, the ones closest to their limits are shown, with the forecast counted. |
 | `window` | `select` | `tightest` | Which window to show: the one `tightest` (closest to its limit), the 5-hour `session`, or `weekly`. |
 | `show_logo` | `bool` | `true` | Show the provider logo. |
 | `show_ring` | `bool` | `true` | Show the ring gauge. |
@@ -97,19 +105,32 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
 ## Notes
 
 - **Network.** The `poller` service is the only part that makes network requests. Every `refresh_minutes` it sends
-  one `GET` per signed-in provider: `https://api.anthropic.com/api/oauth/usage` for Claude and
-  `https://chatgpt.com/backend-api/wham/usage` for Codex. Claude Code and the Codex CLI use these same endpoints for
-  their own usage screens. Headroom identifies itself as `headroom-noctalia/<version>`. It honors `shell.offline_mode`.
-- **Credentials are read-only.** Headroom never refreshes, rewrites or copies a token. Both vendors rotate refresh
+  one request per signed-in provider:
+  - Claude: `GET https://api.anthropic.com/api/oauth/usage`
+  - Codex: `GET https://chatgpt.com/backend-api/wham/usage`
+  - Antigravity: `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, with
+    `daily-cloudcode-pa.googleapis.com` as the fallback
+
+  Each vendor's own tools read these same endpoints. Headroom identifies itself as `headroom-noctalia/<version>`,
+  except to Antigravity's endpoint, which only answers the `antigravity` User-Agent. It honors `shell.offline_mode`.
+- **Credentials are read-only.** Headroom never refreshes, rewrites or copies a token. Antigravity's session is
+  renewed by `agy` itself, never by Headroom. Both vendors rotate refresh
   tokens, so spending one here would sign your CLI out. When a session expires, the card says so, and running the CLI
   once renews it. Headroom picks up the new session within a minute.
 - **Files written.** Everything goes in the plugin data directory (`~/.local/state/noctalia/plugins/data/ayagmar/headroom/`):
   - `cache.json`: the last usage numbers, so the bar has data right after login. It contains no credentials.
   - `icons/` and `rings/`: small theme-tinted SVGs.
-- **Processes.** Headroom spawns only `xdg-open <usage page URL>`, and only when you click a card's link button.
-  The URL is a constant from the provider adapter, passed as an argument with no shell involved.
+- **Processes.** Every command runs directly from an argument list, with no shell:
+  - `xdg-open <usage page URL>`, when you click a card's link button.
+  - `secret-tool lookup service gemini username antigravity`, to read Antigravity's session. After a failed lookup
+    (for example a locked keyring), Headroom waits 30 minutes before asking again, so it never keeps raising unlock
+    prompts.
+  - `env AGY_CLI_DISABLE_AUTO_UPDATE=true agy models`, when the Antigravity session has expired, at most every 10
+    minutes.
 - **These endpoints are undocumented.** Vendors can change them at any time. If a provider's card shows
   *Unexpected response*, please open an issue.
-- **Trademarks.** Claude and Anthropic are trademarks of Anthropic. OpenAI and Codex are trademarks of OpenAI. The
-  logos come from [Simple Icons](https://simpleicons.org) (CC0), are used only to identify each provider, and imply no
-  endorsement.
+- **Trademarks.** Claude and Anthropic are trademarks of Anthropic. OpenAI and Codex are trademarks of OpenAI. Google
+  and Antigravity are trademarks of Google. The Claude and OpenAI logos come from
+  [Simple Icons](https://simpleicons.org) (CC0), and the Antigravity mark comes from
+  [ai-usagebar](https://github.com/akitaonrails/ai-usagebar) (MIT). They are used only to identify each provider and
+  imply no endorsement.

@@ -30,7 +30,7 @@ python3 - <<'PY'
 import pathlib, re
 root = pathlib.Path(".")
 files = [p for p in root.rglob("*.luau") if not p.parts[0] in ("tests", ".tools")]
-files += list(root.glob("providers/*/*.svg")) + list(root.glob("tests/fixtures/*.json")) + [root / "translations/en.json"]
+files += list(root.glob("providers/*/*.svg")) + list(root.glob("tests/fixtures/*.json")) + [root / "translations/en.json", root / "plugin.toml"]
 
 def quote(text):
     level = 0

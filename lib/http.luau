@@ -17,6 +17,10 @@ function M.interpret(response, decode): (any, model.ProviderError?)
     return nil, model.err(E.Network)
   end
   local status = response.status or 0
+  if status == 403 and string.find(response.body or "", "SUBSCRIPTION_REQUIRED", 1, true) then
+    -- Google's way of saying the plan, not the session, is the problem.
+    return nil, model.err(E.NoPlan, "HTTP 403")
+  end
   if status == 401 or status == 403 then
     return nil, model.err(E.Auth, `HTTP {status}`)
   end
@@ -33,20 +37,38 @@ function M.interpret(response, decode): (any, model.ProviderError?)
   return data, nil
 end
 
+local function send(transport, decode, req, done)
+  local started = transport(req, function(response)
+    done(M.interpret(response, decode))
+  end)
+  if started == false then
+    done(nil, model.err(E.Network, "request not started"))
+  end
+end
+
+local function headerLines(headers: { [string]: string }): { string }
+  local lines = { "Accept: application/json" }
+  for name, value in headers do
+    table.insert(lines, `{name}: {value}`)
+  end
+  table.sort(lines) -- deterministic order, for tests and for humans reading logs
+  return lines
+end
+
 -- Builds the getJson(url, headers, done) function handed to adapters through
 -- their context. `transport` is noctalia.http (or a fake in tests).
 function M.client(transport, decode)
   return function(url: string, headers: { [string]: string }, done: (any, model.ProviderError?) -> ())
-    local lines = { "Accept: application/json" }
-    for name, value in headers do
-      table.insert(lines, `{name}: {value}`)
-    end
-    local started = transport({ url = url, method = "GET", headers = lines }, function(response)
-      done(M.interpret(response, decode))
-    end)
-    if started == false then
-      done(nil, model.err(E.Network, "request not started"))
-    end
+    send(transport, decode, { url = url, method = "GET", headers = headerLines(headers) }, done)
+  end
+end
+
+-- postJson(url, headers, body, done): like getJson, with a JSON request body.
+function M.postClient(transport, decode)
+  return function(url: string, headers: { [string]: string }, body: string, done: (any, model.ProviderError?) -> ())
+    local withType = table.clone(headers)
+    withType["Content-Type"] = "application/json"
+    send(transport, decode, { url = url, method = "POST", headers = headerLines(withType), body = body }, done)
   end
 end
 

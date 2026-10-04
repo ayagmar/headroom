@@ -140,8 +140,16 @@ function M.new(sources)
     commandExists = function(name)
       return host.commands[name] == true
     end,
-    runAsync = function(argv)
+    -- host.runHandler(argv) -> CommandResult-ish table; unscripted commands fail.
+    runAsync = function(argv, onResult, _timeoutMs)
       table.insert(host.spawned, argv)
+      if onResult then
+        local result = host.runHandler and host.runHandler(argv) or nil
+        result = result or { exitCode = 127, stdout = "", stderr = "" }
+        result.timedOut = result.timedOut or false
+        result.stderr = result.stderr or ""
+        onResult(result)
+      end
       return true
     end,
     timeFormat = function()

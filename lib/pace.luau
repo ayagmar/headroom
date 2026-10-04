@@ -17,9 +17,11 @@ export type Pace = {
   severity: string, -- "ok" | "warn" | "critical": how worrying the forecast is
 }
 
--- Below this much elapsed time a projection is noise (one burst early in a
--- window would predict exhaustion), so we report elapsed time but no verdict.
-local MIN_ELAPSED_FRACTION = 0.05
+-- Below this much elapsed time a projection is noise: usage is bursty (work
+-- hours, nights, weekends), and one busy morning extrapolated across a week
+-- predicts exhaustion that never comes. 15% is 45 minutes of a 5-hour window
+-- and about a day of a weekly one.
+local MIN_ELAPSED_FRACTION = 0.15
 local MIN_ELAPSED_SECONDS = 15 * 60
 -- Running out only matters when it costs real time: locked out for at least
 -- this fraction of the window is a warning, not a footnote.

@@ -35,8 +35,24 @@ function M.textColor(severity: string): string
   return theme.severityColor(severity) or "on_surface"
 end
 
-function M.percent(window): string
-  return `{math.floor(window.usedPercent + 0.5)}%`
+-- "used" (default) or "remaining": which side of the limit numbers and meters
+-- show. Severity is always computed from usage.
+function M.showsRemaining(): boolean
+  return state.config("display", "used") == "remaining"
+end
+
+-- The number shown for a window, 0..100, in the configured direction.
+function M.shownPercent(window): number
+  return if M.showsRemaining() then 100 - window.usedPercent else window.usedPercent
+end
+
+-- "38%". With `labelled`, says which side it is: "38% used" / "62% left".
+function M.percent(window, labelled: boolean?): string
+  local value = math.floor(M.shownPercent(window) + 0.5)
+  if not labelled then
+    return `{value}%`
+  end
+  return noctalia.tr(if M.showsRemaining() then "percent.left" else "percent.used", { percent = value })
 end
 
 -- Wall-clock time of a reset in the shell's own time format, with the weekday
@@ -77,7 +93,11 @@ function M.pace(window, now: number): (string?, string?, pace.Pace?)
     local color = if p.severity == "ok" then "on_surface_variant" else M.textColor(p.severity)
     return noctalia.tr("pace.runs_out", { duration = time.duration(p.runsOutIn or 0) }), color, p
   elseif p.status == "projected" then
-    return noctalia.tr("pace.projected", { percent = math.floor((p.projectedPercent or 0) + 0.5) }), "on_surface_variant", p
+    local projected = p.projectedPercent or 0
+    if M.showsRemaining() then
+      return noctalia.tr("pace.projected_left", { percent = math.floor(100 - projected + 0.5) }), "on_surface_variant", p
+    end
+    return noctalia.tr("pace.projected", { percent = math.floor(projected + 0.5) }), "on_surface_variant", p
   end
   return nil, nil, p
 end
@@ -96,29 +116,42 @@ function M.visibleProviders(report): { any }
   return out
 end
 
--- What a bar capsule shows: a list of { view, window? } pairs.
---   providerSetting: "all" | "auto" | <provider id>
+-- How pressing a provider's shown window is: forecast-aware severity first,
+-- then usage. Used to pick which providers fit in a capped bar capsule.
+function M.urgency(item, now: number): number
+  if item.window == nil then
+    return -1
+  end
+  return RANK[M.severity(item.window, now)] * 1000 + item.window.usedPercent
+end
+
+-- What a bar capsule shows: a list of { view, window? } pairs, registry order.
+--   providerSetting: "all" | <provider id>
 --   windowPref:      "tightest" | "session" | "weekly"
-function M.barItems(report, providerSetting: string, windowPref: string): { any }
+--   maxProviders:    when more match, the most urgent ones are kept
+function M.barItems(report, providerSetting: string, windowPref: string, maxProviders: number, now: number): { any }
   local items = {}
-  for _, view in M.visibleProviders(report) do
-    if providerSetting == "all" or providerSetting == "auto" or providerSetting == view.id then
+  for index, view in M.visibleProviders(report) do
+    if providerSetting == "all" or providerSetting == view.id then
       local windows = view.snapshot and view.snapshot.windows or {}
-      table.insert(items, { view = view, window = model.pick(windows, windowPref) })
+      table.insert(items, { view = view, window = model.pick(windows, windowPref), order = index })
     end
   end
-  if providerSetting == "auto" and #items > 1 then
-    local best = items[1]
-    for _, item in items do
-      local pct = item.window and item.window.usedPercent or -1
-      local bestPct = best.window and best.window.usedPercent or -1
-      if pct > bestPct then
-        best = item
-      end
-    end
-    return { best }
+  if #items <= maxProviders then
+    return items
   end
-  return items
+  table.sort(items, function(a, b)
+    local ua, ub = M.urgency(a, now), M.urgency(b, now)
+    if ua ~= ub then
+      return ua > ub
+    end
+    return a.order < b.order
+  end)
+  local kept = table.move(items, 1, maxProviders, 1, {})
+  table.sort(kept, function(a, b)
+    return a.order < b.order
+  end)
+  return kept
 end
 
 return M

@@ -203,4 +203,81 @@ t.group("http", function()
   end)
 end)
 
+t.group("pace regressions", function()
+  t.test("a busy first day does not alarm a weekly window", function()
+    -- Live case: 11% used 10h into a 7-day window extrapolates to 177%.
+    local week = 7 * 86400
+    local now = 2_000_000
+    local w = model.window({ id = "w", usedPercent = 11, periodSeconds = week, resetsAt = now + week - 10 * 3600 })
+    t.eq(pace.compute(w, now).status, "early")
+    t.eq(pace.compute(w, now).severity, "ok")
+  end)
+end)
+
+t.group("notify", function()
+  local notify = mods.require("lib/notify.luau")
+  local function opts(overrides)
+    local o = { critical = 90, low = true, reset = true, now = 0, tr = host.globals.noctalia.tr, duration = time.duration }
+    for k, v in overrides or {} do
+      o[k] = v
+    end
+    return o
+  end
+  local function snap(percent, resetsAt)
+    return { windows = { model.window({ id = "s", label = "Session", usedPercent = percent, resetsAt = resetsAt }) } }
+  end
+
+  t.test("low: once per cycle, remembered across calls", function()
+    local notified = {}
+    local first = notify.messages("Claude", snap(80, 5000), snap(92, 5000), notified, opts())
+    t.eq(#first, 1)
+    t.eq(first[1].kind, "low")
+    t.eq(first[1].body, "Session is at 92%. Resets in 1h 23m.")
+    -- Dips below and crosses again in the same cycle: still once.
+    t.eq(#notify.messages("Claude", snap(85, 5000), snap(95, 5000), notified, opts()), 0)
+    -- Next cycle may warn again.
+    t.eq(#notify.messages("Claude", snap(85, 9000), snap(95, 9000), notified, opts()), 1)
+  end)
+
+  t.test("reset: only after being near the limit, only on a real new cycle", function()
+    t.eq(notify.messages("Claude", snap(97, 5000), snap(3, 23000), {}, opts())[1].kind, "reset")
+    t.eq(#notify.messages("Claude", snap(60, 5000), snap(3, 23000), {}, opts()), 0, "was never near the limit")
+    t.eq(#notify.messages("Claude", snap(97, 5000), snap(96, 5001), {}, opts()), 0, "jitter")
+  end)
+
+  t.test("each kind can be switched off", function()
+    t.eq(#notify.messages("Claude", snap(80, 5000), snap(92, 5000), {}, opts({ low = false })), 0)
+    t.eq(#notify.messages("Claude", snap(97, 5000), snap(3, 23000), {}, opts({ reset = false })), 0)
+  end)
+end)
+
+t.group("packaging", function()
+  t.test("lib/state VERSION matches plugin.toml", function()
+    local state = mods.require("lib/state.luau")
+    local manifestVersion = env.sources["plugin.toml"]:match('\nversion%s*=%s*"([^"]+)"')
+    t.eq(state.VERSION, manifestVersion)
+  end)
+
+  t.test("plugin id and panel id match the manifest", function()
+    local state = mods.require("lib/state.luau")
+    t.eq(env.sources["plugin.toml"]:match('\nid%s*=%s*"([^"]+)"'), state.PLUGIN_ID)
+    t.ok(state.PANEL_ID == state.PLUGIN_ID .. ":panel")
+  end)
+end)
+
+t.group("context", function()
+  t.test("a timed-out command counts as not run", function()
+    local h = env.host()
+    h.runHandler = function()
+      return { exitCode = 0, stdout = "partial", timedOut = true }
+    end
+    local ctx = env.modules(h).require("lib/context.luau").new(h.globals.noctalia, "ua")
+    local got = "unset"
+    ctx.run({ "slow" }, 100, function(result)
+      got = result
+    end)
+    t.eq(got, nil)
+  end)
+end)
+
 return true

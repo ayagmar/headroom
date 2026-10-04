@@ -216,8 +216,10 @@ t.group("service", function()
     env.codexAuth(host)
     host.config.disabled_providers = { " Codex " }
     env.start(host, "service.luau")
-    t.eq(#report(host).providers, 1)
-    t.eq(report(host).providers[1].id, "claude")
+    for _, view in report(host).providers do
+      t.ok(view.id ~= "codex", "codex not in the report")
+    end
+    t.eq(provider(host, "claude").status, "ok")
     for _, req in host.requests do
       t.ok(req.url:find("chatgpt.com", 1, true) == nil, "codex not fetched")
     end

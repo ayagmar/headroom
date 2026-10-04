@@ -6,7 +6,7 @@
     "now": "just now"
   },
   "bar": {
-    "empty": "Headroom: no Claude or Codex sign-in found",
+    "empty": "Headroom: no Claude, Codex or Antigravity sign-in found",
     "loading": "Fetching usage…",
     "stale": "cached"
   },
@@ -30,6 +30,10 @@
     "network": {
       "body": "Check your connection. Headroom retries automatically.",
       "title": "Can't reach the provider"
+    },
+    "no_plan": {
+      "body": "This account's plan doesn't include usage limits Headroom can read. Headroom checks again hourly.",
+      "title": "No quota on this plan"
     },
     "not_configured": {
       "body": "No sign-in found.",
@@ -65,12 +69,13 @@
   "pace": {
     "exhausted": "Limit reached",
     "projected": "≈ {percent}% by reset",
+    "projected_left": "≈ {percent}% left at reset",
     "runs_out": "Runs out in {duration}"
   },
   "panel": {
     "cached": "cached",
     "elapsed_tooltip": "{percent}% of this window has elapsed",
-    "empty_body": "Headroom reads the sign-ins of Claude Code and the Codex CLI. Sign in to either and it shows up here automatically.",
+    "empty_body": "Headroom reads the sign-ins of Claude Code, the Codex CLI and Antigravity. Sign in to any of them and it shows up here automatically.",
     "empty_title": "No AI subscriptions found",
     "fetching": "Fetching usage…",
     "not_connected": "{provider} · not connected",
@@ -85,7 +90,14 @@
     "starting": "Starting…",
     "updated": "Updated {ago}"
   },
+  "percent": {
+    "left": "{percent}% left",
+    "used": "{percent}% used"
+  },
   "providers": {
+    "antigravity": {
+      "hint": "Run `agy` once and sign in with Google."
+    },
     "claude": {
       "hint": "Run `claude` once to sign in or renew the session."
     },
@@ -108,8 +120,20 @@
       "label": "Critical at (%)"
     },
     "disabled_providers": {
-      "description": "Provider ids Headroom ignores entirely: never fetched, never shown. Available: claude, codex.",
+      "description": "Provider ids Headroom ignores entirely: never fetched, never shown. Available: claude, codex, antigravity.",
       "label": "Disabled providers"
+    },
+    "display": {
+      "description": "Whether percentages and meters show how much you've used or how much is left. Colors and warnings always follow usage.",
+      "label": "Show",
+      "option": {
+        "remaining": "Remaining",
+        "used": "Used"
+      }
+    },
+    "max_providers": {
+      "description": "How many providers this capsule shows at most. When more are signed in, the ones closest to their limits win.",
+      "label": "Maximum providers"
     },
     "notify": {
       "description": "Notify once per window when usage crosses the critical threshold.",
@@ -124,11 +148,11 @@
       "label": "Forecast colors"
     },
     "provider": {
-      "description": "Which providers this capsule shows. Auto shows only the one closest to its limit.",
+      "description": "Which providers this capsule shows.",
       "label": "Providers",
       "option": {
         "all": "All signed-in providers",
-        "auto": "Auto (closest to limit)",
+        "antigravity": "Antigravity",
         "claude": "Claude",
         "codex": "Codex"
       }
@@ -163,6 +187,10 @@
         "weekly": "Weekly"
       }
     }
+  },
+  "tooltip": {
+    "forecast": "Forecast",
+    "resets": "Resets"
   },
   "window": {
     "code_review": "Code review",

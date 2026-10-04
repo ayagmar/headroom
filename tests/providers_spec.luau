@@ -2,26 +2,12 @@
 local t = require("./support/t")
 local env = require("./support/env")
 
--- Builds the same Context the service builds, over a fake host.
+-- The same Context the service builds, over a fake host.
 local function context(host, mods)
-  local http = mods.require("lib/http.luau")
-  local n = host.globals.noctalia
-  return {
-    now = function() return host.clock end,
-    env = n.getenv,
-    expandPath = n.expandPath,
-    fileExists = n.fileExists,
-    readJson = function(path)
-      local text = n.readFile(path)
-      if text == nil then return nil, "missing" end
-      return n.json.decode(text)
-    end,
-    decodeJson = n.json.decode,
-    getJson = http.client(n.http, n.json.decode),
-    tr = n.tr,
-    userAgent = "headroom-noctalia/test",
-  }
+  return mods.require("lib/context.luau").new(host.globals.noctalia, "headroom-noctalia/test")
 end
+
+local time -- set below from the module runtime
 
 local function fetch(provider, ctx)
   local snapshot, err
@@ -38,6 +24,8 @@ local function byId(windows)
   end
   return out
 end
+
+time = env.modules(env.host()).require("lib/time.luau")
 
 t.group("registry", function()
   t.test("every provider satisfies the contract and has a logo and hint", function()
@@ -236,6 +224,173 @@ t.group("codex", function()
     t.eq(snap.plan, "Pro")
     t.eq(env.headerOf(h.requests[1], "ChatGPT-Account-Id"), "acct-1")
     t.eq(env.headerOf(h.requests[1], "Authorization"), `Bearer {env.JWT_VALID}`)
+  end)
+end)
+
+t.group("antigravity", function()
+  local KEYRING = "secret-tool lookup service gemini username antigravity"
+
+  local function session(expiry: string)
+    return `\{"token":\{"access_token":"ya29.test","token_type":"Bearer","refresh_token":"r","expiry":"{expiry}"},"auth_method":"oauth"}`
+  end
+
+  -- A host with agy installed, secret-tool answering with `keyring`, and the
+  -- quota endpoint answering with `quota` (body string or response table).
+  local function setup(opts)
+    local h = env.host()
+    local m = env.modules(h)
+    local p = m.require("providers/antigravity/init.luau")
+    p.resetRenewCooldown()
+    h.commands["secret-tool"] = opts.secretTool ~= false
+    h.commands["agy"] = opts.agy ~= false
+    local keyring = opts.keyring
+    h.runHandler = function(argv)
+      local line = table.concat(argv, " ")
+      if line == KEYRING then
+        return if keyring then { exitCode = 0, stdout = keyring .. "\n" } else { exitCode = 1, stdout = "" }
+      elseif line == "env AGY_CLI_DISABLE_AUTO_UPDATE=true agy models" then
+        if opts.onRenew then
+          keyring = opts.onRenew()
+        end
+        return { exitCode = 0, stdout = "" }
+      end
+      return nil
+    end
+    env.serve(h, { ["cloudcode-pa.googleapis.com"] = opts.quota or env.fixture("antigravity_quota.json") })
+    return h, p, context(h, m)
+  end
+
+  local FRESH = "2026-09-21T15:00:00Z" -- host clock is 2026-09-21T14:13:20Z
+  local STALE = "2026-09-21T14:00:00Z"
+
+  t.test("parses the live response: remaining inverted to used", function()
+    local h = env.host()
+    local m = env.modules(h)
+    local p = m.require("providers/antigravity/init.luau")
+    local snap = p.parse(h.globals.noctalia.json.decode(env.fixture("antigravity_quota.json")), context(h, m))
+    t.eq(#snap.windows, 4)
+    local w = byId(snap.windows)
+    t.eq(w["gemini-weekly"].label, "Gemini · Weekly")
+    t.near(w["gemini-weekly"].usedPercent, 0.0346, 1e-6)
+    t.eq(w["gemini-weekly"].kind, "weekly")
+    t.eq(w["gemini-weekly"].periodSeconds, 7 * 86400)
+    t.eq(w["gemini-5h"].label, "Gemini · Session")
+    t.eq(w["3p-5h"].label, "Claude & GPT · Session")
+    t.eq(w["3p-weekly"].resetsAt, time.parseIso8601("2026-10-11T01:11:18Z"))
+    env.noMissingKeys(t, h)
+  end)
+
+  t.test("a bucket without a valid fraction is skipped, never shown as 0%", function()
+    local h = env.host()
+    local m = env.modules(h)
+    local p = m.require("providers/antigravity/init.luau")
+    local snap = p.parse({ groups = { { displayName = "Gemini Models", buckets = {
+      { bucketId = "gemini-5h", window = "5h", resetTime = FRESH },
+      { bucketId = "gemini-weekly", window = "weekly", remainingFraction = 1.7 },
+      { bucketId = "gemini-weekly", window = "weekly", remainingFraction = 0.25 },
+    } } } }, context(h, m))
+    t.eq(#snap.windows, 1)
+    t.eq(snap.windows[1].usedPercent, 75)
+  end)
+
+  t.test("fresh keyring session -> POST with the antigravity user agent", function()
+    local h, p, c = setup({ keyring = session(FRESH) })
+    local snap, err = fetch(p, c)
+    t.eq(err, nil)
+    t.eq(#snap.windows, 4)
+    local req = h.requests[1]
+    t.eq(req.method, "POST")
+    t.eq(req.body, "{}")
+    t.eq(env.headerOf(req, "Authorization"), "Bearer ya29.test")
+    t.eq(env.headerOf(req, "User-Agent"), "antigravity")
+    t.eq(env.headerOf(req, "Content-Type"), "application/json")
+    t.eq(table.concat(h.spawned[1], " "), KEYRING)
+  end)
+
+  t.test("go-keyring base64 wrapping and the CLI token file are understood", function()
+    local h, p, c = setup({ keyring = "go-keyring-base64:" .. "eyJhY2Nlc3NUb2tlbiI6InlhMjkudGVzdCIsImV4cGlyZXNBdCI6MTc5MDAwMzYwMDAwMH0=" })
+    local _, err = fetch(p, c)
+    t.eq(err, nil, "base64-wrapped camelCase session with epoch-ms expiry")
+
+    local h2, p2, c2 = setup({ secretTool = false })
+    h2.files["/home/test/.gemini/antigravity-cli/antigravity-oauth-token"] = session(FRESH)
+    local _, err2 = fetch(p2, c2)
+    t.eq(err2, nil, "file fallback without secret-tool")
+    t.eq(#h2.spawned, 0)
+    t.ok(h ~= nil)
+  end)
+
+  t.test("expired session -> agy renews its own session, then we read it again", function()
+    local h, p, c = setup({ keyring = session(STALE), onRenew = function() return session(FRESH) end })
+    local snap, err = fetch(p, c)
+    t.eq(err, nil)
+    t.eq(#snap.windows, 4)
+    local commands = {}
+    for _, argv in h.spawned do
+      table.insert(commands, table.concat(argv, " "))
+    end
+    t.eq(commands[2], "env AGY_CLI_DISABLE_AUTO_UPDATE=true agy models")
+    t.eq(commands[3], KEYRING, "re-read after renewal")
+  end)
+
+  t.test("renewal is rate-limited when it does not help", function()
+    local h, p, c = setup({ keyring = session(STALE), onRenew = function() return session(STALE) end })
+    local _, err = fetch(p, c)
+    t.eq(err.code, "expired")
+    local spawnedBefore = #h.spawned
+    local _, again = fetch(p, c)
+    t.eq(again.code, "expired")
+    t.eq(#h.spawned, spawnedBefore + 1, "only the keyring read, no second agy run")
+    t.eq(#h.requests, 0)
+  end)
+
+  t.test("without agy an expired session is reported, not renewed", function()
+    local h, p, c = setup({ keyring = session(STALE), agy = false })
+    local _, err = fetch(p, c)
+    t.eq(err.code, "expired")
+    t.eq(#h.spawned, 1)
+  end)
+
+  t.test("a failed keyring lookup rests the keyring instead of prompting again", function()
+    local h, p, c = setup({})
+    fetch(p, c)
+    fetch(p, c)
+    local lookups = 0
+    for _, argv in h.spawned do
+      if table.concat(argv, " ") == KEYRING then
+        lookups += 1
+      end
+    end
+    t.eq(lookups, 1)
+  end)
+
+  t.test("no saved session -> not_configured", function()
+    local _, p, c = setup({})
+    local _, err = fetch(p, c)
+    t.eq(err.code, "not_configured")
+  end)
+
+  t.test("SUBSCRIPTION_REQUIRED is a plan problem, not a sign-in problem", function()
+    local _, p, c = setup({
+      keyring = session(FRESH),
+      quota = { ok = true, status = 403, body = '{"error":{"details":[{"reason":"SUBSCRIPTION_REQUIRED"}]}}' },
+    })
+    local _, err = fetch(p, c)
+    t.eq(err.code, "no_plan")
+  end)
+
+  t.test("falls back to the daily endpoint on a server error", function()
+    local h, p, c = setup({ keyring = session(FRESH) })
+    h.httpHandler = function(req)
+      if req.url:find("daily-cloudcode", 1, true) then
+        return { ok = true, status = 200, body = env.fixture("antigravity_quota.json") }
+      end
+      return { ok = true, status = 503, body = "" }
+    end
+    local snap, err = fetch(p, c)
+    t.eq(err, nil)
+    t.eq(#snap.windows, 4)
+    t.eq(#h.requests, 2)
   end)
 end)
 

@@ -18,10 +18,17 @@ export type Context = {
   env: (name: string) -> string?,
   expandPath: (path: string) -> string,
   fileExists: (path: string) -> boolean,
+  readFile: (path: string) -> string?,
   readJson: (path: string) -> (any, string?), -- table, or (nil, err)
   decodeJson: (text: string) -> (any, string?),
   -- GET a JSON document. done(data) on success, done(nil, ProviderError) otherwise.
   getJson: (url: string, headers: { [string]: string }, done: (any, model.ProviderError?) -> ()) -> (),
+  postJson: (url: string, headers: { [string]: string }, body: string, done: (any, model.ProviderError?) -> ()) -> (),
+  -- Runs a program directly (argv, no shell). done(nil) when it could not start.
+  -- Adapters that spawn must say why in their header comment and in the README.
+  run: (argv: { string }, timeoutMs: number, done: (result: { exitCode: number, stdout: string }?) -> ()) -> (),
+  which: (name: string) -> boolean, -- is `name` on PATH?
+  duration: (seconds: number) -> string, -- "3h 12m", localized
   tr: (key: string, subst: { [string]: any }?) -> string,
   userAgent: string, -- "headroom-noctalia/<version>"; identify honestly to vendors
 }

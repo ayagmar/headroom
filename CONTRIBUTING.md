@@ -9,9 +9,12 @@ providers/registry.luau    the list of adapters, in display order
 lib/model.luau             the normalized schema (Window, Snapshot, ProviderError)
 lib/provider.luau          the adapter contract and its Context
 lib/scheduler.luau         per-provider timing, backoff, stale-reply protection
-lib/http.luau              JSON GET + vendor-neutral error mapping
+lib/context.luau           builds the Context: the only capabilities adapters get
+lib/http.luau              JSON GET/POST + vendor-neutral error mapping
+lib/notify.luau            which notifications a new snapshot deserves (pure)
 lib/state.luau             the service <-> surfaces shared-state contract
 lib/view.luau, theme.luau  wording, colors, tinted logos, ring gauges
+ui/cards.luau              provider cards and states, shared by full-detail surfaces
 service.luau               [[service]]: the only entry that fetches
 bar.luau, panel.luau       [[widget]] and [[panel]]: presentation only
 ```
@@ -38,7 +41,8 @@ and lets the tests run adapters against recorded responses.
    - `signInHint(ctx)`: a one-line recovery instruction.
    - `parse`: optional, but expose it so fixtures can test it.
 
-   Use `providers/claude/init.luau` as the reference. Map vendor windows onto the `kind` values `session`, `weekly`,
+   Use `providers/claude/init.luau` as the reference for a token file plus a GET, and
+   `providers/antigravity/init.luau` for a keyring, a POST, and renewal delegated to the vendor's CLI. Map vendor windows onto the `kind` values `session`, `weekly`,
    `model` or `other`, and set `periodSeconds` when you know it, because pacing depends on it.
 2. **Add `providers/<id>/logo.svg`**: a monochrome SVG with no `fill` on the root element. [Simple Icons](https://simpleicons.org)
    is a good source.
@@ -56,7 +60,8 @@ The bar and the panel need no changes.
 
 - **Credentials are read-only.** Never refresh a token or write to a vendor's files. Report `expired` and let the
   vendor's tool renew it.
-- **Don't spawn processes, and only make requests to the vendor's own usage endpoint.**
+- **Only make requests to the vendor's own usage endpoint.** Spawn processes only through `ctx.run`, with
+  argv (no shell), and document each command in the README's *Notes*.
 - **Never put response bodies, tokens or emails in errors or logs.** `lib/http.luau` already keeps bodies out.
 - **Expect undocumented endpoints to change.** Treat every field as optional and return a `parse` error rather
   than throwing. The service also contains adapter crashes, but don't rely on that.

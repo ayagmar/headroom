@@ -6,7 +6,7 @@
 # bar [[widget]] and [[panel]] only draw it. Adding a provider never touches the
 # surfaces: see CONTRIBUTING.md.
 #
-# plugin_api 32: noctalia.getColor (31) for theme-tinted logos and gauges, and
+# plugin_api 32: argv runAsync (24), noctalia.getColor (31) for theme-tinted logos and gauges, and
 # container tooltips (32) on the panel's time tracks.
 
 id = "ayagmar/headroom"
@@ -16,9 +16,9 @@ plugin_api = 32
 author = "ayagmar"
 license = "MIT"
 icon = "gauge"
-description = "Claude and Codex subscription limits in your bar: usage, reset countdowns and pace, with a detailed panel."
+description = "Claude, Codex and Antigravity plan limits in your bar: usage, resets and forecasts, with a detailed panel."
 tags = ["bar", "panel", "service", "ai", "indicator", "productivity"]
-dependencies = ["xdg-open"]
+dependencies = ["xdg-open", "secret-tool"]
 
 # ── Plugin-level settings (shared by the service, every capsule and the panel) ──
 
@@ -48,6 +48,17 @@ description_key = "settings.critical_percent.description"
 default = 90
 min = 1
 max = 100
+
+[[setting]]
+key = "display"
+type = "select"
+label_key = "settings.display.label"
+description_key = "settings.display.description"
+default = "used"
+options = [
+  { value = "used", label_key = "settings.display.option.used" },
+  { value = "remaining", label_key = "settings.display.option.remaining" },
+]
 
 [[setting]]
 key = "notify"
@@ -109,10 +120,19 @@ entry = "bar.luau"
   default = "all"
   options = [
     { value = "all", label_key = "settings.provider.option.all" },
-    { value = "auto", label_key = "settings.provider.option.auto" },
     { value = "claude", label_key = "settings.provider.option.claude" },
     { value = "codex", label_key = "settings.provider.option.codex" },
+    { value = "antigravity", label_key = "settings.provider.option.antigravity" },
   ]
+
+  [[widget.setting]]
+  key = "max_providers"
+  type = "int"
+  label_key = "settings.max_providers.label"
+  description_key = "settings.max_providers.description"
+  default = 3
+  min = 1
+  max = 8
 
   [[widget.setting]]
   key = "window"

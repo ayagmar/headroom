@@ -48,6 +48,9 @@ function M.retryDelay(code: string, failures: number, interval: number): number
     return 60
   elseif code == E.Auth then
     return interval
+  elseif code == E.NoPlan then
+    -- Plans change rarely; check hourly in case the user upgrades.
+    return math.max(interval, 3600)
   elseif code == E.RateLimited then
     return math.min(math.max(interval, 300 * step), 3600)
   end

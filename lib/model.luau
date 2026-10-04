@@ -37,6 +37,7 @@ M.ErrorCode = {
   Expired = "expired", -- credentials present but the token has expired
   Auth = "auth", -- the vendor rejected the credentials (401/403)
   RateLimited = "rate_limited", -- the usage endpoint itself throttled us (429)
+  NoPlan = "no_plan", -- signed in, but the account's plan has no quota for this product
   Network = "network", -- transport failure / offline
   Server = "server", -- 5xx or unexpected status
   Parse = "parse", -- response did not match the expected shape

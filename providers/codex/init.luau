@@ -70,7 +70,7 @@ local function toWindow(raw, id: string, label: string?, ctx, now: number): mode
   return model.window({
     id = id,
     kind = if label then "other" else kind,
-    label = label or (if kind == "other" and period then time.duration(period) else ctx.tr(`window.{kind}`)),
+    label = label or (if kind == "other" and period then ctx.duration(period) else ctx.tr(`window.{kind}`)),
     usedPercent = raw.used_percent,
     resetsAt = resetsAt,
     periodSeconds = period,
@@ -86,7 +86,7 @@ local function collect(windows, rateLimit, prefix: string, label: string?, ctx, 
     local raw = rateLimit[slot]
     local slotLabel = label
     if label and type(raw) == "table" and tonumber(raw.limit_window_seconds) then
-      slotLabel = `{label} · {time.duration(tonumber(raw.limit_window_seconds))}`
+      slotLabel = `{label} · {ctx.duration(tonumber(raw.limit_window_seconds))}`
     end
     local w = toWindow(raw, `{prefix}{slot}`, slotLabel, ctx, now)
     if w then

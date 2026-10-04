@@ -9,42 +9,22 @@
 --
 -- Side effects, for review:
 --   network  GET to each configured provider's usage endpoint (see providers/*)
---   reads    each provider's credentials file (read-only)
+--   reads    each provider's saved sign-in (read-only); see providers/*
+--   spawns   only what adapters declare (Antigravity: secret-tool, agy)
 --   writes   <pluginDataDir>/cache.json (snapshots only, never credentials)
 
 local registry = require("./providers/registry.luau")
 local model = require("./lib/model.luau")
 local scheduler = require("./lib/scheduler.luau")
-local http = require("./lib/http.luau")
+local context = require("./lib/context.luau")
 local state = require("./lib/state.luau")
 local time = require("./lib/time.luau")
+local notify = require("./lib/notify.luau")
 
 local E = model.ErrorCode
 local TICK_MS = 5000
 
-local function decodeJson(text: string)
-  return noctalia.json.decode(text)
-end
-
-local ctx = {
-  now = function()
-    return math.floor(noctalia.nowMs() / 1000)
-  end,
-  env = noctalia.getenv,
-  expandPath = noctalia.expandPath,
-  fileExists = noctalia.fileExists,
-  readJson = function(path: string)
-    local text, err = noctalia.readFile(path)
-    if text == nil then
-      return nil, err
-    end
-    return decodeJson(text)
-  end,
-  decodeJson = decodeJson,
-  getJson = http.client(noctalia.http, decodeJson),
-  tr = noctalia.tr,
-  userAgent = `headroom-noctalia/{state.VERSION}`,
-}
+local ctx = context.new(noctalia, `headroom-noctalia/{state.VERSION}`)
 
 -- ── Per-provider runtime state ─────────────────────────────────────────────
 
@@ -177,48 +157,18 @@ end
 
 -- ── Notifications ──────────────────────────────────────────────────────────
 
--- Two kinds, each at most once per window per reset cycle:
---   "running low"  usage crossed the critical threshold (keyed by resetsAt, so
---                  the next cycle can warn again)
---   "reset"        a window that had reached the critical threshold started a
---                  new cycle: you have your headroom back
-local function notifyChanges(p, rt: Runtime, previous: model.Snapshot?)
-  if rt.snapshot == nil then
-    return
-  end
-  local warnLow = state.config("notify", true) == true
-  local warnReset = state.config("notify_reset", true) == true
-  if not warnLow and not warnReset then
-    return
-  end
+local function sendNotifications(p, rt: Runtime, previous: model.Snapshot?)
   local _, critical = state.thresholds()
-  local before = {}
-  if previous then
-    for _, w in previous.windows do
-      before[w.id] = w
-    end
-  end
-  local now = ctx.now()
-  for _, w in rt.snapshot.windows do
-    local old = before[w.id]
-    local cycle = w.resetsAt or 0
-    local crossed = w.usedPercent >= critical and (old == nil or old.usedPercent < critical)
-    if warnLow and crossed and rt.notified[w.id] ~= cycle then
-      rt.notified[w.id] = cycle
-      local body = if w.resetsAt
-        then noctalia.tr("notify.body_reset", { window = w.label, percent = math.floor(w.usedPercent), reset = time.duration(w.resetsAt - now) })
-        else noctalia.tr("notify.body", { window = w.label, percent = math.floor(w.usedPercent) })
-      noctalia.notify(noctalia.tr("notify.title", { provider = p.name }), body)
-    end
-    -- Vendors jitter reset timestamps by fractions of a second; a new cycle
-    -- moves it by at least the window length, so a minute is a safe margin.
-    local newCycle = old ~= nil and old.resetsAt ~= nil and w.resetsAt ~= nil and w.resetsAt - old.resetsAt > 60
-    if warnReset and newCycle and old.usedPercent >= critical and w.usedPercent < old.usedPercent then
-      noctalia.notify(
-        noctalia.tr("notify.reset_title", { provider = p.name, window = w.label }),
-        noctalia.tr("notify.reset_body", { percent = math.floor(w.usedPercent) })
-      )
-    end
+  local messages = notify.messages(p.name, previous, rt.snapshot, rt.notified, {
+    critical = critical,
+    low = state.config("notify", true) == true,
+    reset = state.config("notify_reset", true) == true,
+    now = ctx.now(),
+    tr = noctalia.tr,
+    duration = time.duration,
+  })
+  for _, message in messages do
+    noctalia.notify(message.title, message.body)
   end
 end
 
@@ -249,7 +199,7 @@ local function fetchProvider(p, rt: Runtime, now: number)
       rt.snapshot = snapshot
       rt.error = nil
       rt.stale = false
-      notifyChanges(p, rt, previous)
+      sendNotifications(p, rt, previous)
       saveCache()
     end
     publish()
