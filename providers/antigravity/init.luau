@@ -232,7 +232,6 @@ return provider.define({
   brand = {
     logo = "providers/antigravity/logo.svg",
     tint = "#4c8df6",
-    accent = "#4c8df6",
     glyph = "rocket",
   },
 

@@ -128,10 +128,10 @@ t.group("service", function()
     t.eq(host.notifications[1].title, "Claude usage is running low")
   end)
 
-  t.test("disabled providers are neither fetched nor shown", function()
+  t.test("providers set to off are neither fetched nor shown", function()
     local host = signedInClaude()
     env.codexAuth(host)
-    host.config.disabled_providers = { " Codex " }
+    host.config.provider_codex = "off"
     env.start(host, "service.luau")
     t.eq(provider(host, "codex"), nil)
     t.eq(#host.requests, 1)

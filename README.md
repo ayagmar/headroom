@@ -53,8 +53,9 @@ gauge and the usage of the window closest to its limit.
 The panel shows one card per provider, with every window (for example Session, Weekly, or Weekly · Opus) as a usage
 meter.
 
-- A thin time track under each meter shows how much of the window has passed. If the meter is ahead of the track,
-  you are using the window faster than it allows.
+- A thin time track under each meter shows the window's time on the same scale: time elapsed under a "used" meter,
+  time remaining under a "left" one. If the meter runs ahead of the track, you are using the window faster than it
+  allows.
 - Each window shows when it resets, as a countdown plus the clock time in your shell's time format
   (`Resets in 3h 27m · 20:19`, or `Sat 07:59` for weekly windows).
 - The forecast extrapolates your usage so far:
@@ -73,14 +74,19 @@ noctalia msg panel-toggle ayagmar/headroom:panel
 ## Settings
 
 All settings are on one page (Settings → Plugins → Headroom, or middle-click the capsule). They are grouped by
-prefix: **Bar**, **Display**, **Alerts** and **Data**.
+prefix: **Providers**, **Bar**, **Display**, **Alerts** and **Data**.
+
+**Providers**
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `provider_claude`, `provider_codex`, `provider_antigravity` | `select` | `bar` | Where each provider appears: `bar` (bar and panel), `panel` (panel only) or `off` (never fetched, never shown). |
 
 **Bar**
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `bar_claude`, `bar_codex`, `bar_antigravity` | `bool` | `true` | Which providers the bar shows (one switch each). Switched-off providers still appear in the panel. |
-| `max_providers` | `int` | `3` | The most providers the bar shows (1–8). When more are switched on and signed in, the ones closest to their limits are shown, with the forecast counted. |
+| `max_providers` | `int` | `3` | The most providers the bar shows (1–8). When more are set to `bar` and signed in, the ones closest to their limits are shown, with the forecast counted. |
 | `window` | `select` | `tightest` | Which window to show: `tightest` (closest to its limit), the 5-hour `session`, or `weekly`. |
 | `bar_style` | `select` | `full` | What each provider shows next to its logo: `full` (ring and percentage), `value` (percentage only) or `ring` (ring only). |
 
@@ -92,7 +98,8 @@ prefix: **Bar**, **Display**, **Alerts** and **Data**.
 | `warn_percent` | `int` | `70` | Usage at or above this percentage uses the warning color. A window on course to be locked out for at least 10% of its length before it resets also does. |
 | `critical_percent` | `int` | `90` | Usage at or above this percentage uses the error color and can notify you. |
 
-Healthy meters use each provider's brand color.
+Healthy meters use your theme's primary color, so warning (amber) and critical (red) always stand out; logos keep
+their brand colors.
 
 **Alerts**
 
@@ -105,7 +112,6 @@ Healthy meters use each provider's brand color.
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
 | `refresh_minutes` | `int` | `5` | Minutes between fetches for each provider (1–120). Failures retry sooner with backoff. Throttling waits longer. |
-| `disabled_providers` | `string_list` | `[]` | Advanced. Provider ids to ignore entirely (`claude`, `codex`, `antigravity`). A listed provider is never fetched and never shown. |
 
 ## IPC
 

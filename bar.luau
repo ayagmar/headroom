@@ -33,7 +33,7 @@ local function itemNodes(item, vertical: boolean, style: string, now: number)
 
   local severity = view.severity(window, now)
   if style ~= "value" then
-    local ring = theme.ring(view.shownPercent(window), theme.meterColor(provider, severity), "surface_variant")
+    local ring = theme.ring(view.shownPercent(window), theme.meterColor(severity), "surface_variant")
     if ring then
       table.insert(nodes, ui.image({ path = ring, width = ICON_SIZE, height = ICON_SIZE, opacity = if dimmed then 0.6 else 1 }))
     end
@@ -91,7 +91,7 @@ local function render()
   local now = view.now()
   local maxProviders = math.clamp(state.config("max_providers", 3), 1, 8)
   local shown = function(id: string): boolean
-    return state.config(`bar_{id}`, true)
+    return state.providerMode(id) == "bar"
   end
   local items = view.barItems(report, shown, state.config("window", "tightest"), maxProviders, now)
 

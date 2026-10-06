@@ -21,31 +21,52 @@ tags = ["bar", "panel", "service", "ai", "indicator", "productivity"]
 dependencies = ["xdg-open", "secret-tool"]
 
 # ── Settings ────────────────────────────────────────────────────────────────
-# One page, read top to bottom in four groups whose labels carry the group
-# name (the settings schema has no section headers): Bar, Display, Alerts,
-# Data. Every entry reads them, so all capsules and the panel agree.
-# The schema has no multi-select either, so "which providers the bar shows"
-# is one bar_<provider id> toggle per provider.
+# One page, read top to bottom in groups whose labels carry the group name
+# (the settings schema has no section headers): Providers, Bar, Display,
+# Alerts, Data. Every entry reads them, so all capsules and the panel agree.
+# The schema has no multi-select either, so where each provider appears is one
+# provider_<id> select per provider: in the bar and panel, panel only, or off
+# (never fetched).
+
+# Providers ·
+
+[[setting]]
+key = "provider_claude"
+type = "select"
+label_key = "settings.provider_claude.label"
+description_key = "settings.provider.description"
+default = "bar"
+options = [
+  { value = "bar", label_key = "settings.provider.option.bar" },
+  { value = "panel", label_key = "settings.provider.option.panel" },
+  { value = "off", label_key = "settings.provider.option.off" },
+]
+
+[[setting]]
+key = "provider_codex"
+type = "select"
+label_key = "settings.provider_codex.label"
+description_key = "settings.provider.description"
+default = "bar"
+options = [
+  { value = "bar", label_key = "settings.provider.option.bar" },
+  { value = "panel", label_key = "settings.provider.option.panel" },
+  { value = "off", label_key = "settings.provider.option.off" },
+]
+
+[[setting]]
+key = "provider_antigravity"
+type = "select"
+label_key = "settings.provider_antigravity.label"
+description_key = "settings.provider.description"
+default = "bar"
+options = [
+  { value = "bar", label_key = "settings.provider.option.bar" },
+  { value = "panel", label_key = "settings.provider.option.panel" },
+  { value = "off", label_key = "settings.provider.option.off" },
+]
 
 # Bar ·
-
-[[setting]]
-key = "bar_claude"
-type = "bool"
-label_key = "settings.bar_claude.label"
-default = true
-
-[[setting]]
-key = "bar_codex"
-type = "bool"
-label_key = "settings.bar_codex.label"
-default = true
-
-[[setting]]
-key = "bar_antigravity"
-type = "bool"
-label_key = "settings.bar_antigravity.label"
-default = true
 
 [[setting]]
 key = "max_providers"
@@ -131,13 +152,6 @@ default = 5
 min = 1
 max = 120
 
-[[setting]]
-key = "disabled_providers"
-type = "string_list"
-label_key = "settings.disabled_providers.label"
-description_key = "settings.disabled_providers.description"
-default = []
-advanced = true
 
 # ── Entries ─────────────────────────────────────────────────────────────────
 

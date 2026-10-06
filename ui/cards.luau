@@ -50,18 +50,24 @@ local function windowRow(provider, window, now: number, dimmed: boolean)
       progress = view.shownPercent(window) / 100,
       height = 8,
       radius = 4,
-      fill = theme.meterColor(provider, severity),
+      fill = theme.meterColor(severity),
       track = TRACK,
     }),
   }
 
   if pace then
-    -- The time track: how much of this window has elapsed.
+    -- The time track, on the same scale as the meter above it: time elapsed
+    -- under a "used" meter, time remaining under a "left" one. A meter that
+    -- outruns its track (used) or falls short of it (left) is burning fast.
+    local remaining = view.showsRemaining()
+    local fraction = if remaining then 1 - pace.elapsedFraction else pace.elapsedFraction
     table.insert(children, ui.column({
-      tooltip = noctalia.tr("panel.elapsed_tooltip", { percent = math.floor(pace.elapsedFraction * 100 + 0.5) }),
+      tooltip = noctalia.tr(if remaining then "panel.remaining_tooltip" else "panel.elapsed_tooltip", {
+        percent = math.floor(fraction * 100 + 0.5),
+      }),
     }, {
       ui.progress({
-        progress = pace.elapsedFraction,
+        progress = fraction,
         height = 3,
         radius = 2,
         fill = "on_surface_variant/0.55",

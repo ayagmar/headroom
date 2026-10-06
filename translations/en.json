@@ -75,6 +75,7 @@
     "not_refreshed": "Not refreshed yet",
     "open_dashboard": "Open {provider} usage page",
     "refresh_tooltip": "Refresh now (R)",
+    "remaining_tooltip": "{percent}% of this window remains",
     "retry": "Retry",
     "settings_tooltip": "Settings",
     "showing_cached": "Showing data from {ago}.",
@@ -101,15 +102,6 @@
     "now": "Resetting now"
   },
   "settings": {
-    "bar_antigravity": {
-      "label": "Bar · Show Antigravity"
-    },
-    "bar_claude": {
-      "label": "Bar · Show Claude"
-    },
-    "bar_codex": {
-      "label": "Bar · Show Codex"
-    },
     "bar_style": {
       "description": "What each provider shows next to its logo.",
       "label": "Bar · Style",
@@ -123,25 +115,38 @@
       "description": "Usage at or above this percentage is shown in the error color and can notify you.",
       "label": "Display · Critical at (%)"
     },
-    "disabled_providers": {
-      "description": "Provider ids Headroom ignores entirely: never fetched, never shown.",
-      "label": "Data · Disabled providers"
-    },
     "display": {
-      "description": "Whether percentages and meters show how much you've used or how much is left. Colors and warnings always follow usage.",
-      "label": "Display · Show",
+      "description": "Used or remaining, for percentages, rings and meters. Colors and warnings always follow usage.",
+      "label": "Display · Show amounts as",
       "option": {
         "remaining": "Remaining",
         "used": "Used"
       }
     },
     "max_providers": {
-      "description": "How many providers the bar shows at most. When more are switched on and signed in, the ones closest to their limits win.",
+      "description": "How many providers the bar shows at most. When more are in the bar and signed in, the ones closest to their limits win.",
       "label": "Bar · Maximum providers"
     },
     "notify": {
       "description": "Notify once when a window crosses the critical threshold, and again when it resets.",
       "label": "Alerts · Notifications"
+    },
+    "provider": {
+      "description": "Where this provider appears. Off: never fetched or shown.",
+      "option": {
+        "bar": "Bar and panel",
+        "off": "Off",
+        "panel": "Panel only"
+      }
+    },
+    "provider_antigravity": {
+      "label": "Providers · Antigravity"
+    },
+    "provider_claude": {
+      "label": "Providers · Claude"
+    },
+    "provider_codex": {
+      "label": "Providers · Codex"
     },
     "refresh_minutes": {
       "description": "How often to fetch usage from each provider, in minutes. Failures retry sooner with backoff.",

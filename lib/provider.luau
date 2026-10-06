@@ -37,7 +37,6 @@ export type Context = {
 export type Brand = {
   logo: string, -- plugin-relative SVG; monochrome, tinted at runtime
   tint: string, -- logo color: "#rrggbb" or a palette role ("on_surface")
-  accent: string, -- meter color while usage is healthy: "#rrggbb" or a role
   glyph: string, -- Tabler glyph fallback where an image cannot be used
   dashboard: string?, -- the vendor's usage page, opened from the panel card
 }
@@ -64,7 +63,7 @@ function M.define(spec): Provider
     assert(spec[key] ~= nil, `provider is missing required field '{key}'`)
   end
   assert(spec.id:match("^[a-z0-9][a-z0-9_-]*$"), `provider id '{spec.id}' must be lowercase [a-z0-9_-]`)
-  for _, key in { "logo", "tint", "accent", "glyph" } do
+  for _, key in { "logo", "tint", "glyph" } do
     assert(spec.brand[key] ~= nil, `provider '{spec.id}' brand is missing '{key}'`)
   end
   return spec

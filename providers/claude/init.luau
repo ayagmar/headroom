@@ -169,7 +169,6 @@ return provider.define({
   brand = {
     logo = "providers/claude/logo.svg",
     tint = "#D97757",
-    accent = "#D97757",
     glyph = "sparkles",
     dashboard = "https://claude.ai/settings/usage",
   },

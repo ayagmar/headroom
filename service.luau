@@ -57,17 +57,8 @@ end
 
 local lastRefreshAt: number? = nil
 
--- Providers the user switched off: never fetched, never shown. Rebuilt when
--- settings change.
-local disabled: { [string]: boolean } = {}
-
-local function readDisabled()
-  disabled = {}
-  for _, entry in state.config("disabled_providers", {}) do
-    if type(entry) == "string" then
-      disabled[(entry:lower():gsub("%s", ""))] = true
-    end
-  end
+local function isOff(id: string): boolean
+  return state.providerMode(id) == "off"
 end
 
 local function intervalSeconds(): number
@@ -134,7 +125,7 @@ local function publish()
   local now = ctx.now()
   local views = {}
   for _, p in registry do
-    if not disabled[p.id] then
+    if not isOff(p.id) then
       local rt = runtimes[p.id]
       table.insert(views, {
         id = p.id,
@@ -216,7 +207,7 @@ local function tick(recheckSignIn: boolean?)
   local changed = false
   for _, p in registry do
     local rt = runtimes[p.id]
-    if disabled[p.id] then
+    if isOff(p.id) then
       continue
     end
     if recheckSignIn or now - rt.checkedAt >= SIGN_IN_CHECK_SECONDS then
@@ -272,7 +263,6 @@ function onIpc(event, _payload)
 end
 
 function onConfigChanged()
-  readDisabled()
   -- A new interval applies from now on; reschedule so a shorter one takes effect.
   local now = ctx.now()
   for _, p in registry do
@@ -290,7 +280,6 @@ noctalia.state.watch(state.COMMAND, function(command)
   end
 end)
 
-readDisabled()
 loadCache()
 noctalia.setUpdateInterval(TICK_MS)
 tick()

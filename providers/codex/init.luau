@@ -143,7 +143,6 @@ return provider.define({
   brand = {
     logo = "providers/codex/logo.svg",
     tint = "on_surface",
-    accent = "#10A37F",
     glyph = "brand-openai",
     dashboard = "https://chatgpt.com/codex/settings/usage",
   },

@@ -17,7 +17,7 @@ local M = {}
 local WARN_DARK = "#f2b84b"
 local WARN_LIGHT = "#a86400"
 
--- Color for a severity, or nil for "ok" (callers use the provider accent or
+-- Color for a severity, or nil for "ok" (callers use the theme's primary or
 -- the default text color).
 function M.severityColor(severity: string): string?
   if severity == "critical" then
@@ -36,10 +36,11 @@ function M.hex(colorOrRole: string): string
   return (noctalia.getColor(colorOrRole) or "#888888"):lower()
 end
 
--- The meter color for a provider at a severity: its brand accent while
--- healthy, the shared warning/critical colors otherwise.
-function M.meterColor(provider, severity: string): string
-  return M.severityColor(severity) or provider.brand.accent
+-- Meter color at a severity. Healthy meters use the theme's primary, not a
+-- vendor color: brand oranges and greens sit too close to warning amber and
+-- error red, and the logo already says whose meter it is.
+function M.meterColor(severity: string): string
+  return M.severityColor(severity) or "primary"
 end
 
 local dirs = {}

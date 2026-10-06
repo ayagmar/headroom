@@ -36,7 +36,7 @@ and lets the tests run adapters against recorded responses.
 
 1. **Create `providers/<id>/init.luau`** and return `provider.define{...}` with these fields:
    - `id`, `name`
-   - `brand = { logo, tint, accent, glyph, dashboard? }`
+   - `brand = { logo, tint, glyph, dashboard? }` (tint colors the logo; meters use the theme)
    - `isConfigured(ctx)`: a cheap local check, run on every tick.
    - `fetch(ctx, done)`: calls `done(snapshot)` or `done(nil, model.err(code))` exactly once.
    - `signInHint(ctx)`: a one-line recovery instruction.
@@ -48,12 +48,12 @@ and lets the tests run adapters against recorded responses.
 2. **Add `providers/<id>/logo.svg`**: a monochrome SVG with no `fill` on the root element. [Simple Icons](https://simpleicons.org)
    is a good source.
 3. **Register it** with one line in `providers/registry.luau`.
-4. **Give it a bar switch**: add a `bar_<id>` bool setting (default `true`) to `plugin.toml` and a
-   `settings.bar_<id>.label` ("Bar · Show <Name>") to `translations/en.json`.
+4. **Give it a Providers setting**: copy a `provider_<id>` select in `plugin.toml` (the options and description are
+   shared) and add its `settings.provider_<id>.label` ("Providers · <Name>") to `translations/en.json`.
 5. **Translate** `providers.<id>.hint` in `translations/en.json`.
 6. **Test it**: record a real response into `tests/fixtures/<id>_usage.json` (redact ids and emails), then add
    parse and fetch cases to `tests/providers_spec.luau`.
-   `scripts/test.sh` fails if steps 3–5 disagree: a provider without a bar switch, a switch without a
+   `scripts/test.sh` fails if steps 3–5 disagree: a provider without a Providers setting, a setting without a
    provider, and a translation used but missing (or defined but unused) are all caught.
 7. **Document it**: add the endpoint and credential path to the README's *Requirements* and *Notes*.
 

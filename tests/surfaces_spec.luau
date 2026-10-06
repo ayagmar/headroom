@@ -40,6 +40,7 @@ t.group("bar", function()
     local images = env.ofType(host.barTree, "image")
     t.eq(#images, 4)
     t.ok(host.files[images[1].props.path]:find('fill="#d97757"', 1, true) ~= nil, "logo tinted with the brand color")
+    t.ok(host.files[images[2].props.path]:find('stroke="#88aaff"', 1, true) ~= nil, "healthy ring in the theme primary")
     t.ok(images[2].props.path:find("/data/rings/ring%-47%-") ~= nil, images[2].props.path)
   end)
 
@@ -60,8 +61,8 @@ t.group("bar", function()
     t.eq(rows[3].value, "≈ 66% by reset")
   end)
 
-  t.test("providers can be switched off in the bar", function()
-    local host = running({ config = { bar_claude = false } })
+  t.test("panel-only providers stay out of the bar", function()
+    local host = running({ config = { provider_claude = "panel" } })
     env.start(host, "bar.luau")
     t.eq(table.concat(env.texts(host.barTree), ","), "51%")
   end)
@@ -73,7 +74,7 @@ t.group("bar", function()
   end)
 
   t.test("remaining mode inverts numbers and rings, not colors", function()
-    local host = running({ claudeSession = 95, config = { bar_codex = false, window = "session", display = "remaining" } })
+    local host = running({ claudeSession = 95, config = { provider_codex = "panel", window = "session", display = "remaining" } })
     env.start(host, "bar.luau")
     t.eq(firstLabel(host.barTree).text, "5%")
     t.eq(firstLabel(host.barTree).color, "error", "severity follows usage")
@@ -82,7 +83,7 @@ t.group("bar", function()
   end)
 
   t.test("forecast raises the color before the threshold", function()
-    local host = running({ claudeSession = 60, config = { bar_codex = false, window = "session" } })
+    local host = running({ claudeSession = 60, config = { provider_codex = "panel", window = "session" } })
     host.clock = 1791058799 - 3 * 3600 -- 2h in, 60% used: locked out for 1h40m
     env.start(host, "bar.luau")
     t.eq(firstLabel(host.barTree).color, "#f2b84b")
@@ -90,14 +91,14 @@ t.group("bar", function()
   end)
 
   t.test("a maxed-out window shows when it comes back", function()
-    local host = running({ claudeSession = 100, config = { bar_codex = false, window = "session" } })
+    local host = running({ claudeSession = 100, config = { provider_codex = "panel", window = "session" } })
     host.clock = 1791058799 - 4500
     env.start(host, "bar.luau")
     t.eq(firstLabel(host.barTree).text, "1h 15m")
   end)
 
   t.test("vertical bars drop the percent sign", function()
-    local host = running({ config = { bar_claude = false } })
+    local host = running({ config = { provider_claude = "panel" } })
     host.vertical = true
     env.start(host, "bar.luau")
     t.eq(host.barTree.type, "column")
@@ -105,7 +106,7 @@ t.group("bar", function()
   end)
 
   t.test("follows the report as it changes", function()
-    local host, svc = running({ config = { bar_codex = false, window = "session" } })
+    local host, svc = running({ config = { provider_codex = "panel", window = "session" } })
     env.start(host, "bar.luau")
     env.serve(host, { ["api.anthropic.com"] = env.claudeBody(host, 77), ["chatgpt.com"] = env.fixture("codex_usage.json") })
     svc.call("onIpc", "refresh")
@@ -136,6 +137,24 @@ t.group("panel", function()
     local _, texts = openPanel(host)
     t.contains(texts, "Resets in 2d · Sun 07:59")
     t.contains(texts, "≈ 34% left at reset") -- Claude weekly: 47% used, ~66% by reset
+  end)
+
+  t.test("the time track matches the meter's direction", function()
+    local host = running()
+    host.clock = 1791058799 - 4 * 3600 -- Claude session: 1h of 5h elapsed
+    openPanel(host)
+    local function track()
+      for _, n in env.ofType(host.panelTree, "progress") do
+        if n.props.height == 3 then
+          return n.props.progress
+        end
+      end
+      return nil
+    end
+    t.near(track(), 0.2, 1e-6, "used: time elapsed")
+    host.config.display = "remaining"
+    openPanel(host)
+    t.near(track(), 0.8, 1e-6, "remaining: time left")
   end)
 
   t.test("error banner explains how to recover", function()
