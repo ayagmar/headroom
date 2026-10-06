@@ -6,6 +6,8 @@ a pace check that says whether you will run out before the reset.
 
 Headroom reuses the sign-in your CLIs already have. It needs no API keys and installs nothing extra.
 
+![Headroom panel and bar capsule](screenshot.png)
+
 ## Plugin
 
 | Field | Value |
