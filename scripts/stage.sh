@@ -5,7 +5,8 @@
 # Usage: scripts/stage.sh ~/Projects/noctalia-community-plugins
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-dest="${1:?usage: scripts/stage.sh <community-plugins checkout>}/headroom"
+checkout="$(cd "${1:?usage: scripts/stage.sh <community-plugins checkout>}" && pwd)"
+dest="$checkout/headroom"
 rm -rf "$dest"
 mkdir -p "$dest"
 cd "$root"
