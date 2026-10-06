@@ -94,6 +94,18 @@ Everything is on one page: Settings → Plugins → Headroom, or middle-click th
 
 Healthy meters use your theme's primary color, so amber and red always stand out. Logos keep their brand colors.
 
+## Adding a provider
+
+Each provider is an adapter: one folder under `providers/` with a Luau module and a logo. The adapter only knows its
+vendor (where the sign-in lives, which endpoint to call, how to read the response) and returns usage in a shared
+format. Everything else works for it without changes: the bar, the panel, forecasts, notifications, caching, retries
+and session renewal. The three adapters here are about 200 lines each.
+
+Wiring one in takes a line in `providers/registry.luau`, a setting in `plugin.toml` and two strings in
+`translations/en.json`; the tests fail if any of them is missing. The
+[contributing guide](https://github.com/ayagmar/headroom/blob/main/CONTRIBUTING.md) walks through it. Providers ship
+with the plugin, so to get one added (Copilot, Cursor, OpenRouter, …), open an issue or a pull request.
+
 ## IPC
 
 ```sh
