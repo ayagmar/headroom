@@ -129,6 +129,8 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
     minutes. agy renews its own session.
 - **The endpoints are undocumented** and can change without notice. If a card says *Unexpected response*, please
   [open an issue](https://github.com/ayagmar/headroom/issues).
+- **Source and issues** live at [github.com/ayagmar/headroom](https://github.com/ayagmar/headroom), along with the
+  tests and a guide to adding a provider.
 - **Trademarks.** Claude and Anthropic are trademarks of Anthropic; OpenAI and Codex of OpenAI; Google and
   Antigravity of Google. The Claude and OpenAI logos come from [Simple Icons](https://simpleicons.org) (CC0) and the
   Antigravity mark from [ai-usagebar](https://github.com/akitaonrails/ai-usagebar) (MIT). They only identify each
