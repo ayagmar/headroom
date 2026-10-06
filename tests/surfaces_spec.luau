@@ -168,7 +168,7 @@ t.group("panel", function()
     local host = env.host()
     env.start(host, "service.luau")
     local _, texts = openPanel(host)
-    t.contains(texts, "No AI subscriptions found")
+    t.contains(texts, "No signed-in providers")
     t.contains(texts, "Codex · not connected")
   end)
 

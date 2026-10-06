@@ -24,26 +24,26 @@
       "title": "Session expired"
     },
     "network": {
-      "body": "Check your connection. Headroom retries automatically.",
+      "body": "Check your connection. Headroom will try again shortly.",
       "title": "Can't reach the provider"
     },
     "no_plan": {
-      "body": "This account's plan doesn't include usage limits Headroom can read. Headroom checks again hourly.",
+      "body": "This account's plan has no usage quota for this product. Headroom checks again every hour.",
       "title": "No quota on this plan"
     },
     "not_configured": {
       "title": "Not signed in"
     },
     "parse": {
-      "body": "The usage format may have changed. Please report this.",
+      "body": "The usage format may have changed. Please report it on GitHub.",
       "title": "Unexpected response"
     },
     "rate_limited": {
-      "body": "The usage endpoint asked us to slow down. Headroom retries automatically.",
+      "body": "Too many requests. Headroom will wait, then try again.",
       "title": "Throttled"
     },
     "server": {
-      "body": "The provider had a problem. Headroom retries automatically.",
+      "body": "The provider returned an error. Headroom will try again shortly.",
       "title": "Service error"
     }
   },
@@ -57,7 +57,7 @@
   "notify": {
     "body": "{window} is at {percent}%.",
     "body_reset": "{window} is at {percent}%. Resets in {reset}.",
-    "reset_body": "You have your headroom back: now at {percent}%.",
+    "reset_body": "Usage is back to {percent}%.",
     "reset_title": "{provider} {window} has reset",
     "title": "{provider} usage is running low"
   },
@@ -69,8 +69,8 @@
   },
   "panel": {
     "elapsed_tooltip": "{percent}% of this window has elapsed",
-    "empty_body": "Headroom reads the sign-ins your AI coding tools already saved. Sign in to a supported tool and it shows up here automatically.",
-    "empty_title": "No AI subscriptions found",
+    "empty_body": "Headroom reads the sign-ins your AI coding tools have already saved. Sign in to one and it appears here.",
+    "empty_title": "No signed-in providers",
     "not_connected": "{provider} · not connected",
     "not_refreshed": "Not refreshed yet",
     "open_dashboard": "Open {provider} usage page",
@@ -112,11 +112,11 @@
       }
     },
     "critical_percent": {
-      "description": "Usage at or above this percentage is shown in the error color and can notify you.",
+      "description": "Usage at or above this turns the error color and can send a notification.",
       "label": "Display · Critical at (%)"
     },
     "display": {
-      "description": "Used or remaining, for percentages, rings and meters. Colors and warnings always follow usage.",
+      "description": "Whether numbers, rings and meters show what you've used or what's left. Colors always follow usage.",
       "label": "Display · Show amounts as",
       "option": {
         "remaining": "Remaining",
@@ -124,7 +124,7 @@
       }
     },
     "max_providers": {
-      "description": "How many providers the bar shows at most. When more are in the bar and signed in, the ones closest to their limits win.",
+      "description": "The bar shows at most this many. If more qualify, it keeps the ones closest to their limits.",
       "label": "Bar · Maximum providers"
     },
     "notify": {
@@ -149,11 +149,11 @@
       "label": "Providers · Codex"
     },
     "refresh_minutes": {
-      "description": "How often to fetch usage from each provider, in minutes. Failures retry sooner with backoff.",
+      "description": "Minutes between fetches for each provider. Failed fetches retry sooner.",
       "label": "Data · Refresh interval (min)"
     },
     "warn_percent": {
-      "description": "Usage at or above this percentage is shown in the warning color.",
+      "description": "Usage at or above this turns the warning color.",
       "label": "Display · Warning at (%)"
     },
     "window": {

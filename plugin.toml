@@ -1,4 +1,4 @@
-# Headroom — see how much of your AI subscription limits you have left.
+# Headroom: how much of your AI plan limits you have left.
 #
 # Architecture: providers/<id>/ are adapters that turn one vendor's usage API
 # into the shared model (lib/model.luau). The [[service]] is the only entry that
@@ -6,8 +6,8 @@
 # bar [[widget]] and [[panel]] only draw it. Adding a provider never touches the
 # surfaces: see CONTRIBUTING.md.
 #
-# plugin_api 32: argv runAsync (24), noctalia.getColor (31) for theme-tinted logos and gauges, and
-# container tooltips (32) on the panel's time tracks.
+# plugin_api 32: argv runAsync (24), noctalia.getColor (31) for theme-tinted
+# logos and gauges, and container tooltips (32) on the panel's time tracks.
 
 id = "ayagmar/headroom"
 name = "Headroom"
@@ -16,7 +16,7 @@ plugin_api = 32
 author = "ayagmar"
 license = "MIT"
 icon = "gauge"
-description = "Claude, Codex and Antigravity plan limits in your bar: usage, resets and forecasts, with a detailed panel."
+description = "How much of your Claude, Codex and Antigravity plan limits is left, with reset times and forecasts."
 tags = ["bar", "panel", "service", "ai", "indicator", "productivity"]
 dependencies = ["xdg-open", "secret-tool"]
 
