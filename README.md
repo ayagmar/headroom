@@ -26,10 +26,14 @@ Sign in to at least one of these. Headroom picks up each one on its own; there i
   keeps in your keyring (through `secret-tool`) or in `~/.gemini/antigravity-cli/antigravity-oauth-token`. Plans
   without Antigravity quota show *No quota on this plan*.
 
-Two optional tools:
+Optional tools, all declared in `dependencies`. Each one only powers the feature below, and when it's missing that
+feature is skipped:
 
 - `xdg-open` opens a provider's usage page from the panel. Without it, those buttons are hidden.
-- `secret-tool` (from libsecret) reads Antigravity's keyring session.
+- `secret-tool` (from libsecret) reads Antigravity's keyring session. Without it, only the token file is read.
+- `claude` (Claude Code) renews an expired Claude session. Without it, the card asks you to sign in again.
+- `agy` (the Antigravity CLI) renews an expired Antigravity session, run through `env` to turn off its auto-updater
+  for that run. Without them, the card asks you to sign in again.
 
 ## Usage
 

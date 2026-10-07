@@ -18,7 +18,9 @@ license = "MIT"
 icon = "gauge"
 description = "How much of your Claude, Codex and Antigravity plan limits is left, with reset times and forecasts."
 tags = ["bar", "panel", "service", "ai", "indicator", "productivity"]
-dependencies = ["xdg-open", "secret-tool"]
+# All optional: each powers one feature listed in the README's Requirements,
+# and that feature is skipped when the tool is missing.
+dependencies = ["xdg-open", "secret-tool", "claude", "agy", "env"]
 
 # ── Settings ────────────────────────────────────────────────────────────────
 # One page, read top to bottom in groups whose labels carry the group name
