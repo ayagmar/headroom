@@ -105,18 +105,34 @@ t.group("service", function()
     t.eq(account(host, "claude").status, "ok")
   end)
 
-  t.test("serves the disk cache immediately after a restart", function()
+  t.test("serves the disk cache after a restart and refetches only when it is due", function()
     local host = signedInClaude()
     env.start(host, "service.luau")
-    local restarted = env.host()
-    env.claudeCreds(restarted)
+    local restarted = signedInClaude()
     restarted.files["/data/cache.json"] = host.files["/data/cache.json"]
-    restarted.httpHandler = nil -- network has not answered yet
-    env.start(restarted, "service.luau")
+    restarted.clock = host.clock + 60
+    local svc = env.start(restarted, "service.luau")
     local claude = account(restarted, "claude")
     t.eq(claude.status, "ok")
     t.eq(claude.stale, true)
-    t.eq(claude.busy, true)
+    t.eq(#restarted.requests, 0, "data from a minute ago is not fetched again")
+    restarted.clock += 240
+    svc.call("update")
+    t.eq(#restarted.requests, 1, "fetched once its interval is over")
+  end)
+
+  t.test("a manual refresh doesn't retry a throttled account before its wait is over", function()
+    local host = signedInClaude()
+    local svc = env.start(host, "service.luau")
+    env.serve(host, { ["api.anthropic.com"] = { ok = true, status = 429, body = "" } })
+    svc.call("onIpc", "refresh")
+    t.eq(#host.requests, 2)
+    host.clock += 60
+    svc.call("onIpc", "refresh")
+    t.eq(#host.requests, 2, "still throttled: not asked again")
+    host.clock += 240
+    svc.call("onIpc", "refresh")
+    t.eq(#host.requests, 3, "the wait is over")
   end)
 
   t.test("notifies once when crossing the critical threshold", function()

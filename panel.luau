@@ -202,8 +202,10 @@ noctalia.state.watch(state.REPORT, function(value)
 end)
 
 -- Opening the panel is a request to see current numbers: show what we have
--- immediately, and fetch anything older than this in the background.
-local OPEN_FRESHNESS = 30
+-- immediately, and fetch anything older than this in the background. Long
+-- enough that opening the panel again and again doesn't add requests: the
+-- usage endpoints throttle, and Claude's limit is shared with Claude Code.
+local OPEN_FRESHNESS = 120
 
 function onOpen(_context)
   isOpen = true

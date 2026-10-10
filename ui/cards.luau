@@ -118,7 +118,8 @@ local function windowRow(window, now: number, dimmed: boolean)
 end
 
 -- What failed and how to fix it; when older data is still shown below, says
--- how old it is. A sign-in problem offers the login itself.
+-- how old it is. A sign-in problem offers the login itself; throttling offers
+-- nothing, since retrying early only extends the wait.
 local function errorBanner(account, now: number, options)
   local err = account.error
   local title = noctalia.tr(`error.{err.code}.title`)
@@ -128,6 +129,7 @@ local function errorBanner(account, now: number, options)
   end
   local action = if needsSignIn(account) and account.canSignIn
     then signInButton(account, options)
+    elseif err.code == "rate_limited" then nil
     else ui.button({
       glyph = "refresh",
       variant = "ghost",

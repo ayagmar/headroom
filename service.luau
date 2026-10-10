@@ -185,14 +185,20 @@ local function newRuntime(p, account: accounts.Account): Runtime
     signingInSince = nil,
     duplicateOf = nil,
   }
+  checkSignIn(rt, base.now())
   local entry = cached[account.key]
   if entry then
     cached[account.key] = nil
     rt.snapshot = entry.snapshot
     rt.stale = true
     rt.notified = if type(entry.notified) == "table" then entry.notified else {}
+    -- Data fetched shortly before a restart or reload is still current: wait
+    -- out the rest of its interval instead of fetching it again.
+    local fetchedAt = entry.snapshot.fetchedAt
+    if type(fetchedAt) == "number" then
+      rt.schedule.nextAt = math.min(fetchedAt, base.now()) + intervalSeconds()
+    end
   end
-  checkSignIn(rt, base.now())
   return rt
 end
 
@@ -426,14 +432,17 @@ local function tick(recheckSignIn: boolean?)
 end
 
 -- A refresh request. Without `maxAge` (refresh button, R, IPC) every account
--- is fetched now. With it (opening the panel), only accounts whose last good
--- data is older than `maxAge` are fetched, and an account in backoff after a
--- failure keeps its backoff: opening the panel must not hammer a throttled API.
+-- is fetched now, except one the API throttled: asking again before its wait
+-- is over only extends it. With `maxAge` (opening the panel), only accounts
+-- whose last good data is older than `maxAge` are fetched, and an account in
+-- backoff after a failure keeps its backoff.
 local function refresh(maxAge: number?)
   local now = base.now()
   eachListed(function(rt)
-    local wanted = maxAge == nil
-      or (rt.error == nil and (rt.stale or rt.snapshot == nil or now - (rt.snapshot.fetchedAt or 0) >= maxAge))
+    local throttled = rt.error ~= nil and rt.error.code == E.RateLimited and not scheduler.isDue(rt.schedule, now)
+    local wanted = if maxAge == nil
+      then not throttled
+      else rt.error == nil and (rt.stale or rt.snapshot == nil or now - (rt.snapshot.fetchedAt or 0) >= maxAge)
     if wanted then
       scheduler.force(rt.schedule, now)
     end

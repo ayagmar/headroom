@@ -58,7 +58,7 @@ Each signed-in provider shows its logo and how much of one window it has used (o
 
 | Action | What it does |
 | --- | --- |
-| Left click | Opens the panel. Data older than 30 seconds is fetched again while it opens. |
+| Left click | Opens the panel. Data older than 2 minutes is fetched again while it opens. |
 | Right click | Refreshes now (`plugin ayagmar/headroom:poller all refresh`; rebind it in the widget's settings). |
 | Middle click | Opens Headroom's settings. |
 | Hover | Shows each window's usage, reset time and forecast. |
