@@ -44,7 +44,8 @@ function M.fixture(name: string): string
   return assert(sources[`tests/fixtures/{name}`], `missing fixture {name}`)
 end
 
-function M.claudeCreds(host, overrides)
+-- Claude Code's sign-in, in the default folder or in `home`.
+function M.claudeCreds(host, overrides, home: string?)
   local oauth = {
     accessToken = "claude-token",
     expiresAt = (host.clock + 3600) * 1000,
@@ -54,7 +55,17 @@ function M.claudeCreds(host, overrides)
   for k, v in overrides or {} do
     oauth[k] = v
   end
-  host.files[M.CLAUDE_CREDS] = host.globals.noctalia.json.encode({ claudeAiOauth = oauth })
+  local path = if home then `{home}/.credentials.json` else M.CLAUDE_CREDS
+  host.files[path] = host.globals.noctalia.json.encode({ claudeAiOauth = oauth })
+end
+
+-- Claude Code's profile naming the signed-in account: ~/.claude.json for the
+-- default folder, <home>/.claude.json for any other.
+function M.claudeProfile(host, accountUuid: string, home: string?)
+  local path = if home then `{home}/.claude.json` else "/home/test/.claude.json"
+  host.files[path] = host.globals.noctalia.json.encode({
+    oauthAccount = { accountUuid = accountUuid, organizationUuid = "org", emailAddress = `{accountUuid}@example.com` },
+  })
 end
 
 function M.codexAuth(host, tokens)
@@ -89,15 +100,25 @@ function M.headerOf(req, name: string): string?
   return nil
 end
 
--- The Context the service builds, over a fake host.
-function M.context(host)
-  return M.modules(host).require("lib/context.luau").new(host.globals.noctalia, "headroom-noctalia/test")
+-- The Context the service builds for a provider's default account, over a
+-- fake host. `account` ({ kind, home }) picks another account folder.
+function M.context(host, p, account)
+  local mods = M.modules(host)
+  local context = mods.require("lib/context.luau")
+  local base = context.new(host.globals.noctalia, "headroom-noctalia/test")
+  if p == nil or p.accounts == nil then
+    return base
+  end
+  local accounts = mods.require("lib/accounts.luau")
+  account = account or { kind = "default", home = accounts.defaultHome(p.accounts, base) }
+  return context.forAccount(base, p.accounts, account)
 end
 
 -- A fresh host, one provider adapter loaded in it, and its context.
 function M.provider(id: string)
   local host = M.host()
-  return host, M.modules(host).require(`providers/{id}/init.luau`), M.context(host)
+  local p = M.modules(host).require(`providers/{id}/init.luau`)
+  return host, p, M.context(host, p)
 end
 
 -- Runs an adapter's fetch; returns (snapshot, err).

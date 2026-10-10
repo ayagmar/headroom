@@ -82,11 +82,33 @@ t.group("claude", function()
     t.eq(#host.requests, 0)
   end)
 
+  t.test("another account renews in its own folder; a found one is left to its owner", function()
+    local host, claude = env.provider("claude")
+    host.commands["claude"] = true
+    local added = "/data/accounts/claude/side"
+    env.claudeCreds(host, { expiresAt = (host.clock - 60) * 1000 }, added)
+    host.runHandler = function(argv)
+      if table.concat(argv, " ") == `env CLAUDE_CONFIG_DIR={added} claude -p /status --no-session-persistence` then
+        env.claudeCreds(host, nil, added)
+        return { exitCode = 0, stdout = "" }
+      end
+      return nil
+    end
+    env.serve(host, { ["api.anthropic.com"] = env.fixture("claude_usage.json") })
+    local _, err = fetch(claude, env.context(host, claude, { kind = "added", home = added }))
+    t.eq(err, nil)
+
+    local found = "/home/test/.claude-work"
+    env.claudeCreds(host, { expiresAt = (host.clock - 60) * 1000 }, found)
+    t.eq(select(2, fetch(claude, env.context(host, claude, { kind = "found", home = found }))).code, "expired")
+    t.eq(#host.spawned, 1, "no renewal in a found folder")
+  end)
+
   t.test("honors CLAUDE_CONFIG_DIR", function()
-    local host, claude, ctx = env.provider("claude")
+    local host, claude = env.provider("claude")
     host.env.CLAUDE_CONFIG_DIR = "/work/claude"
     host.files["/work/claude/.credentials.json"] = "{}"
-    t.eq(claude.isConfigured(ctx), true)
+    t.eq(claude.isConfigured(env.context(host, claude)), true)
   end)
 end)
 

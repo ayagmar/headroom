@@ -193,4 +193,105 @@ t.group("panel", function()
   end)
 end)
 
+t.group("accounts", function()
+  local WORK = "/home/test/.claude-work"
+
+  -- Claude signed in twice: the default at 38% session, ~/.claude-work at 88%.
+  local function twoClaudeAccounts(config)
+    local host = env.host()
+    host.commands["claude"] = true
+    env.claudeCreds(host)
+    env.claudeCreds(host, { accessToken = "work-token" }, WORK)
+    host.httpHandler = function(req)
+      local work = env.headerOf(req, "Authorization") == "Bearer work-token"
+      return { ok = true, status = 200, body = env.claudeBody(host, if work then 88 else 38) }
+    end
+    for k, v in config or {} do
+      host.config[k] = v
+    end
+    env.start(host, "service.luau")
+    return host
+  end
+
+  local function button(tree, predicate)
+    return env.find(tree, function(n) return n.type == "button" and predicate(n.props) end)[1]
+  end
+
+  t.test("the bar shows the default account unless asked for every account", function()
+    local host = twoClaudeAccounts({ window = "session" })
+    env.start(host, "bar.luau")
+    t.eq(table.concat(env.texts(host.barTree), ","), "38%")
+    t.eq(host.tooltip[1].key, "Claude · Default · Session")
+
+    host.config.bar_accounts = "all"
+    env.start(host, "bar.luau")
+    t.eq(table.concat(env.texts(host.barTree), ","), "38%,88%")
+    local keys = {}
+    for _, row in host.tooltip do
+      table.insert(keys, row.key)
+    end
+    t.contains(keys, "Claude · work · Session")
+  end)
+
+  t.test("the panel gives each account its own section", function()
+    local host = twoClaudeAccounts()
+    local _, texts = openPanel(host)
+    for _, text in { "Claude", "2 accounts", "Default", "work", "38%", "88%" } do
+      t.contains(texts, text)
+    end
+  end)
+
+  t.test("removing asks twice", function()
+    local host = twoClaudeAccounts()
+    openPanel(host)
+    local hide = button(host.panelTree, function(p) return p.glyph == "eye-off" end)
+    hide.props.onClick()
+    t.eq(#host.stateValues.report.providers[1].accounts, 2, "first click only asks")
+    button(host.panelTree, function(p) return p.text == "Hide?" end).props.onClick()
+    t.eq(#host.stateValues.report.providers[1].accounts, 1)
+  end)
+
+  t.test("renaming from the panel", function()
+    local host = twoClaudeAccounts()
+    openPanel(host)
+    button(host.panelTree, function(p) return p.glyph == "pencil" end).props.onClick()
+    local input = env.ofType(host.panelTree, "input")[1]
+    input.props.onSubmit("Personal")
+    t.contains(env.texts(host.panelTree), "Personal")
+    t.eq(#env.ofType(host.panelTree, "input"), 0, "editor closed")
+  end)
+
+  t.test("copying gives the command that starts the CLI as the account", function()
+    local host = twoClaudeAccounts()
+    openPanel(host)
+    button(host.panelTree, function(p) return p.glyph == "terminal-2" end).props.onClick()
+    t.eq(host.clipboard, "CLAUDE_CONFIG_DIR='/home/test/.claude-work' claude")
+  end)
+
+  t.test("adding from the panel: name it, sign in, and it appears waiting for the sign-in", function()
+    local host = twoClaudeAccounts()
+    openPanel(host)
+    button(host.panelTree, function(p) return p.glyph == "user-plus" end).props.onClick()
+    local input = env.ofType(host.panelTree, "input")[1]
+    input.props.onChange("Side")
+    button(host.panelTree, function(p) return p.text == "Sign in" and p.variant == "primary" end).props.onClick()
+    t.eq(#host.terminals, 1)
+    local texts = env.texts(host.panelTree)
+    t.contains(texts, "Side")
+    t.contains(texts, "Waiting for sign-in…")
+    t.eq(#env.ofType(host.panelTree, "input"), 0, "form closed")
+  end)
+
+  t.test("a provider that isn't signed in offers the sign-in", function()
+    local host = env.host()
+    host.commands["codex"] = true
+    env.start(host, "service.luau")
+    openPanel(host)
+    local row = env.find(host.panelTree, function(n) return n.props.key == "off-codex" end)[1]
+    button(row, function(p) return p.text == "Sign in" end).props.onClick()
+    t.eq(host.terminals[1]:find("'codex' 'login'", 1, true) ~= nil, true, host.terminals[1])
+    t.eq(host.terminals[1]:find("CODEX_HOME", 1, true), nil, "the default account signs in where the CLI looks")
+  end)
+end)
+
 return true

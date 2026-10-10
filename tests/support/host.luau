@@ -26,6 +26,7 @@ function M.new(sources)
     config = {},
     env = {},
     files = {},
+    dirs = {}, -- folders made with mkdirAll
     requests = {},
     httpHandler = nil, -- function(req) -> response | nil (nil = never answers)
     pending = {}, -- callbacks of unanswered requests
@@ -35,6 +36,9 @@ function M.new(sources)
     toggledPanels = {},
     commands = { ["xdg-open"] = true },
     spawned = {},
+    terminals = {}, -- commands passed to runInTerminal
+    terminalWorks = true,
+    clipboard = nil,
     vertical = false,
     barTree = nil,
     tooltip = nil,
@@ -56,7 +60,9 @@ function M.new(sources)
   end
 
   local function expand(path: string): string
-    if path:sub(1, 2) == "~/" then
+    if path == "~" then
+      return "/home/test"
+    elseif path:sub(1, 2) == "~/" then
       return "/home/test/" .. path:sub(3)
     end
     return path
@@ -105,8 +111,30 @@ function M.new(sources)
     fileExists = function(path)
       return host.files[expand(path)] ~= nil
     end,
-    mkdirAll = function()
+    mkdirAll = function(path)
+      host.dirs[expand(path)] = true
       return true, nil
+    end,
+    -- Names directly inside `path`, from the files and folders the host holds.
+    listDir = function(path)
+      local prefix = expand(path):gsub("/$", "") .. "/"
+      local names, seen = {}, {}
+      local function visit(full)
+        if full:sub(1, #prefix) == prefix then
+          local name = full:sub(#prefix + 1):match("^[^/]+")
+          if name and not seen[name] then
+            seen[name] = true
+            table.insert(names, name)
+          end
+        end
+      end
+      for full in host.files do
+        visit(full)
+      end
+      for full in host.dirs do
+        visit(full)
+      end
+      return names, nil
     end,
     pluginDataDir = function()
       return "/data", nil
@@ -124,6 +152,22 @@ function M.new(sources)
     notify = function(title, body)
       table.insert(host.notifications, { title = title, body = body })
     end,
+    notifyError = function(title, body)
+      table.insert(host.notifications, { title = title, body = body, error = true })
+    end,
+    runInTerminal = function(cmd)
+      table.insert(host.terminals, cmd)
+      return host.terminalWorks
+    end,
+    copyToClipboard = function(text)
+      host.clipboard = text
+      return true
+    end,
+    string = {
+      trim = function(text)
+        return (text:match("^%s*(.-)%s*$"))
+      end,
+    },
     setUpdateInterval = function() end,
     togglePanel = function(id)
       table.insert(host.toggledPanels, id)
@@ -190,7 +234,7 @@ function M.new(sources)
     end
   end
   local ui = {}
-  for _, kind in { "column", "row", "scroll", "label", "glyph", "image", "separator", "progress", "button" } do
+  for _, kind in { "column", "row", "scroll", "label", "glyph", "image", "separator", "progress", "button", "input" } do
     ui[kind] = node(kind)
   end
 

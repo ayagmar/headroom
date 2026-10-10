@@ -8,7 +8,8 @@ providers/<id>/logo.svg    monochrome logo, tinted at runtime
 providers/registry.luau    the list of adapters, in display order
 lib/model.luau             the normalized schema (Window, Snapshot, ProviderError)
 lib/provider.luau          the adapter contract and its Context
-lib/context.luau           builds the Context: everything an adapter is allowed to do
+lib/context.luau           builds the Context: everything an adapter is allowed to do, per account
+lib/accounts.luau          a provider's accounts (one per config folder), the registry of added ones
 lib/http.luau              JSON GET/POST and error mapping (adapters can classify their own error bodies)
 lib/renew.luau             hands an expired session back to the vendor's CLI, with a cooldown
 lib/scheduler.luau         per-provider timing, backoff, dropping late replies
@@ -19,7 +20,7 @@ lib/fs.luau                atomic file writes
 lib/state.luau             what the service publishes and the surfaces read
 lib/view.luau, theme.luau  wording, colors, tinted logos, ring gauges
 ui/cards.luau              provider cards and their states
-service.luau               [[service]]: the only entry that fetches
+service.luau               [[service]]: the only entry that fetches; carries out account commands
 bar.luau, panel.luau       [[widget]] and [[panel]]: presentation only
 ```
 
@@ -28,7 +29,7 @@ Data flows one way:
 ```
 adapter.fetch(ctx) ──► service ──noctalia.state("report")──► bar / panel
                          ▲                                      │
-                         └──── noctalia.state("command") ◄──────┘  (refresh)
+                         └──── noctalia.state("command") ◄──────┘  (refresh, add/sign in/remove account)
 ```
 
 Adapters never touch the `noctalia` global. Everything they can do (read a file, fetch JSON, run a command, translate
@@ -44,10 +45,16 @@ review, and lets the tests run adapters against recorded responses.
    - `fetch(ctx, done)`: calls `done(snapshot)` or `done(nil, model.err(code))`, exactly once.
    - `signInHint(ctx)`: one line telling the user how to sign in.
    - `parse` (optional): the pure response-to-snapshot step, exposed so fixtures can test it.
+   - `accounts` (optional): for a CLI that keeps its sign-in in a folder an environment variable can move, like
+     Claude Code's `CLAUDE_CONFIG_DIR`. Give the variable, the default folder, the prefix of sibling folders, the CLI and
+     its login arguments, and an `identity(ctx)` that reads who is signed in. Headroom then shows one account per
+     folder, lets users add accounts from the panel, and runs your adapter once per account with `ctx.home` set to
+     that folder: read credentials from there, and wrap any command you run in `ctx.inHome(argv)`. Skip renewal when
+     `ctx.mayRenew` is false.
 
-   `providers/claude/init.luau` is the model for a token file and a GET. `providers/antigravity/init.luau` covers a
-   keyring, a POST and session renewal. Map each vendor window onto a `kind` (`session`, `weekly`, `model` or
-   `other`), and set `periodSeconds` when you know it: forecasts need it.
+   `providers/claude/init.luau` is the model for a token file, a GET, accounts and session renewal;
+   `providers/antigravity/init.luau` for a keyring and a POST. Map each vendor window onto a `kind` (`session`,
+   `weekly`, `model` or `other`), and set `periodSeconds` when you know it: forecasts need it.
 2. **Add `providers/<id>/logo.svg`**: monochrome, with no `fill` on the root element.
    [Simple Icons](https://simpleicons.org) is a good source.
 3. **Register it** with one line in `providers/registry.luau`.
