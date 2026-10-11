@@ -173,32 +173,8 @@ local function accountStatus(account): string?
   return plan
 end
 
--- An account signed in to the same account as an earlier one: two folders,
--- one set of limits. Says so instead of showing the numbers twice.
-local function duplicateNotice(account, options)
-  local children = {
-    ui.glyph({ name = "copy", size = 18, color = theme.severityColor("warn") }),
-    ui.column({ gap = 2, flexGrow = 1 }, {
-      ui.label({
-        text = noctalia.tr("accounts.duplicate_title", { account = account.duplicateOf }),
-        fontSize = 12,
-        fontWeight = "semibold",
-        color = "on_surface",
-      }),
-      M.caption(noctalia.tr("accounts.duplicate_body"), nil, { maxLines = 3 }),
-    }),
-  }
-  if account.canSignIn then
-    table.insert(children, signInButton(account, options))
-  end
-  return ui.row({ gap = 10, align = "center", padding = 10, radius = 10, fill = "on_surface/0.06" }, children)
-end
-
 -- Banner, meters and notes for one account.
 local function accountBody(account, now: number, options): { any }
-  if account.duplicateOf then
-    return { duplicateNotice(account, options) }
-  end
   local body = {}
   local snapshot = account.snapshot
   local dimmed = account.status == "error"
@@ -220,6 +196,23 @@ local function accountBody(account, now: number, options): { any }
     table.insert(body, M.caption(noctalia.tr("status.fetching")))
   end
   return body
+end
+
+-- Remove an added account (deletes its folder) or hide a found one; asks
+-- again before acting.
+local function removeButton(account, options)
+  local hides = account.kind == "found"
+  local confirming = options.confirmingRemove == account.key
+  return ui.button({
+    glyph = if confirming then nil else (if hides then "eye-off" else "trash"),
+    text = if confirming then noctalia.tr(if hides then "accounts.hide_confirm" else "accounts.remove_confirm") else nil,
+    variant = if confirming then "destructive" else "ghost",
+    controlSize = "sm",
+    tooltip = noctalia.tr(if hides then "accounts.hide_tooltip" else "accounts.remove_tooltip"),
+    onClick = function()
+      options.onRemove(account.key)
+    end,
+  })
 end
 
 -- Name, state and the account's own actions: sign in, copy the command that
@@ -292,20 +285,35 @@ local function accountHeader(provider, account, options)
     }))
   end
   if account.kind ~= "default" then
-    local hides = account.kind == "found"
-    local confirming = options.confirmingRemove == account.key
-    table.insert(children, ui.button({
-      glyph = if confirming then nil else (if hides then "eye-off" else "trash"),
-      text = if confirming then noctalia.tr(if hides then "accounts.hide_confirm" else "accounts.remove_confirm") else nil,
-      variant = if confirming then "destructive" else "ghost",
-      controlSize = "sm",
-      tooltip = noctalia.tr(if hides then "accounts.hide_tooltip" else "accounts.remove_tooltip"),
-      onClick = function()
-        options.onRemove(account.key)
-      end,
-    }))
+    table.insert(children, removeButton(account, options))
   end
   return ui.row({ align = "center", gap = 6 }, children)
+end
+
+-- An account signed in to the same account as an earlier one: two folders,
+-- one set of limits. One line under the folder's own name instead of the
+-- numbers twice; signing in with another account or removing it fixes it.
+local function duplicateRow(account, options)
+  local children = {
+    ui.glyph({ name = "copy", size = 14, color = "on_surface_variant" }),
+    ui.row({
+      gap = 6,
+      align = "center",
+      flexGrow = 1,
+      tooltip = noctalia.tr("accounts.duplicate_body", { account = account.duplicateOf })
+        .. (if account.home then "\n" .. account.home else ""),
+    }, {
+      ui.label({ text = account.label or noctalia.tr("accounts.default"), fontSize = 13, fontWeight = "semibold", color = "on_surface", maxLines = 1 }),
+      M.caption(noctalia.tr("accounts.duplicate_title", { account = account.duplicateOf }), nil, { maxLines = 1, flexGrow = 1 }),
+    }),
+  }
+  if account.canSignIn then
+    table.insert(children, signInButton(account, options, "ghost"))
+  end
+  if account.kind ~= "default" then
+    table.insert(children, removeButton(account, options))
+  end
+  return ui.row({ key = account.key, align = "center", gap = 6 }, children)
 end
 
 local function addForm(provider, options)
@@ -394,11 +402,15 @@ function M.providerCard(provider, now: number, options: Options)
       if i > 1 then
         table.insert(body, ui.separator({ color = "outline/0.25" }))
       end
-      local section = { accountHeader(provider, account, options) }
-      for _, node in accountBody(account, now, options) do
-        table.insert(section, node)
+      if account.duplicateOf then
+        table.insert(body, duplicateRow(account, options))
+      else
+        local section = { accountHeader(provider, account, options) }
+        for _, node in accountBody(account, now, options) do
+          table.insert(section, node)
+        end
+        table.insert(body, ui.column({ key = account.key, gap = 10 }, section))
       end
-      table.insert(body, ui.column({ key = account.key, gap = 10 }, section))
     end
   end
 

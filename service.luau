@@ -319,7 +319,7 @@ local function publish()
         table.insert(accountViews, {
           key = key,
           kind = rt.account.kind,
-          label = labelOf(rt),
+          label = if rt.duplicateOf then rt.account.label else labelOf(rt), -- a duplicate goes by its folder's name
           email = rt.identity and rt.identity.email,
           home = rt.account.home,
           launch = launchCommand(rt),

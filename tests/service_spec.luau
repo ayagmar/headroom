@@ -338,6 +338,11 @@ t.group("accounts", function()
     t.eq(sessionOf(view.accounts[1]), 12, "the default shows the account it is signed in to now")
     t.eq(view.accounts[1].label, "Work", "and is named after it")
     t.eq(view.accounts[2].duplicateOf, "Work")
+
+    host.globals.noctalia.state.set("command", { action = "rename", key = "claude", label = "Job" })
+    view = claudeView(host)
+    t.eq(view.accounts[2].duplicateOf, "Job")
+    t.eq(view.accounts[2].label, "Work", "the duplicate keeps its folder's name, not the account's")
   end)
 
   t.test("a name given to a signed-in account follows it to another folder", function()

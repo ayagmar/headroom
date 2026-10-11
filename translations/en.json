@@ -9,7 +9,7 @@
     "count": "{n} accounts",
     "default": "Default",
     "default_tooltip": "The account {provider} uses unless you pick another",
-    "duplicate_body": "Both folders are signed in to one account, so they share limits. Remove this one, or sign in again with another account in a private browser window.",
+    "duplicate_body": "This folder is signed in to {account} too, so it shares those limits. Sign in with another account in a private browser window, or remove it.",
     "duplicate_title": "Same account as {account}",
     "hide_confirm": "Hide?",
     "hide_tooltip": "Hide this account. Its folder stays as it is.",
