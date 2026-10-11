@@ -6,7 +6,7 @@
 local M = {}
 
 M.PANEL_ID = "ayagmar/headroom:panel"
-M.VERSION = "0.2.0"
+M.VERSION = "0.2.1"
 
 -- Published by the service:
 --   {

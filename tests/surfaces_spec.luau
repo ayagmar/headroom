@@ -180,7 +180,7 @@ t.group("panel", function()
     t.eq(table.concat(host.spawned[1], " "), "xdg-open https://claude.ai/settings/usage")
   end)
 
-  t.test("opening fetches data older than 30 seconds, once", function()
+  t.test("opening fetches data older than 2 minutes, once", function()
     local host = running()
     local panel = openPanel(host)
     local before = #host.requests
@@ -231,6 +231,26 @@ t.group("accounts", function()
       table.insert(keys, row.key)
     end
     t.contains(keys, "Claude · work · Session")
+  end)
+
+  t.test("the bar leaves out an account signed in to one already shown", function()
+    local host = env.host()
+    host.commands["claude"] = true
+    host.config.bar_accounts = "all"
+    host.config.window = "session"
+    env.claudeCreds(host)
+    env.claudeProfile(host, "me")
+    host.httpHandler = function()
+      return { ok = true, status = 200, body = env.claudeBody(host, 38) }
+    end
+    local svc = env.start(host, "service.luau")
+    host.globals.noctalia.state.set("command", { action = "add", provider = "claude", label = "Work" })
+    env.claudeCreds(host, nil, "/data/accounts/claude/work")
+    env.claudeProfile(host, "me", "/data/accounts/claude/work")
+    host.clock += 5
+    svc.call("update")
+    env.start(host, "bar.luau")
+    t.eq(table.concat(env.texts(host.barTree), ","), "38%")
   end)
 
   t.test("the panel gives each account its own section", function()

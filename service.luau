@@ -208,6 +208,7 @@ end
 -- Returns true when any list changed.
 local function syncAccounts(): boolean
   local changed = false
+  local named = false
   local present = {}
   for _, p in registry do
     local keys = {}
@@ -239,6 +240,13 @@ local function syncAccounts(): boolean
         end
         if id and not first then
           seen[id] = account.key
+          -- An added account is named for the account it was added for.
+          local names = accountRegistry.names
+          if account.kind == "added" and (names[p.id] == nil or names[p.id][id] == nil) then
+            names[p.id] = names[p.id] or {}
+            names[p.id][id] = account.label
+            named = true
+          end
         end
         table.insert(keys, account.key)
       end
@@ -254,14 +262,26 @@ local function syncAccounts(): boolean
       runtimes[key] = nil
     end
   end
+  if named then
+    accounts.save(accountRegistry)
+    changed = true
+  end
   return changed
+end
+
+-- An account's name, nil for an unnamed default: the name given to the
+-- folder's sign-in, so after `/login` the card is named after the account it
+-- now shows, else the folder's own name.
+local function labelOf(rt: Runtime): string?
+  local id = rt.identity and rt.identity.id
+  return id and (accountRegistry.names[rt.provider.id] or {})[id] or rt.account.label
 end
 
 local function displayName(rt: Runtime): string
   if #(listed[rt.provider.id] or {}) <= 1 then
     return rt.provider.name
   end
-  return `{rt.provider.name} · {rt.account.label or noctalia.tr("accounts.default")}`
+  return `{rt.provider.name} · {labelOf(rt) or noctalia.tr("accounts.default")}`
 end
 
 -- The shell command that starts the provider's CLI as this account, for the
@@ -299,7 +319,7 @@ local function publish()
         table.insert(accountViews, {
           key = key,
           kind = rt.account.kind,
-          label = rt.account.label,
+          label = labelOf(rt),
           email = rt.identity and rt.identity.email,
           home = rt.account.home,
           launch = launchCommand(rt),
@@ -310,7 +330,7 @@ local function publish()
           busy = scheduler.isBusy(rt.schedule, now),
           signingIn = rt.signingInSince ~= nil,
           canSignIn = canSignIn,
-          duplicateOf = rt.duplicateOf and runtimes[rt.duplicateOf] and (runtimes[rt.duplicateOf].account.label or noctalia.tr("accounts.default")),
+          duplicateOf = rt.duplicateOf and runtimes[rt.duplicateOf] and (labelOf(runtimes[rt.duplicateOf]) or noctalia.tr("accounts.default")),
         })
       end
       table.insert(views, {
@@ -400,21 +420,23 @@ local function tick(recheckSignIn: boolean?)
       rt.signingInSince = nil
       changed = true
     end
-    if (recheckSignIn or waiting or now - rt.checkedAt >= SIGN_IN_CHECK_SECONDS) and checkSignIn(rt, now) then
-      changed = true
-      if rt.configured and rt.provider.accounts then
-        syncAccounts() -- it may be signed in to an account already shown
-      end
-    elseif waiting and rt.configured then
-      -- Signing in again over an existing sign-in: the new one shows as a
-      -- different identity.
-      local before = rt.identity and rt.identity.id
-      readIdentity(rt)
-      if rt.identity and rt.identity.id ~= before then
-        rt.signingInSince = nil
-        rt.error = nil
-        scheduler.force(rt.schedule, now)
-        resync = true
+    if recheckSignIn or waiting or now - rt.checkedAt >= SIGN_IN_CHECK_SECONDS then
+      if checkSignIn(rt, now) then
+        changed = true
+        if rt.configured and rt.provider.accounts then
+          syncAccounts() -- it may be signed in to an account already shown
+        end
+      elseif rt.configured and rt.provider.accounts then
+        -- A sign-in over an existing one, from the panel or from the CLI
+        -- itself (`/login`), shows as a different identity.
+        local before = rt.identity and rt.identity.id
+        readIdentity(rt)
+        if rt.identity and rt.identity.id ~= before then
+          rt.signingInSince = nil
+          rt.error = nil
+          scheduler.force(rt.schedule, now)
+          resync = true
+        end
       end
     end
     if rt.configured and rt.duplicateOf == nil and scheduler.isDue(rt.schedule, now) then
@@ -462,7 +484,7 @@ local function signIn(rt: Runtime)
   end
   local intro = noctalia.tr("accounts.login_intro", {
     provider = p.name,
-    account = rt.account.label or noctalia.tr("accounts.default"),
+    account = labelOf(rt) or noctalia.tr("accounts.default"),
   })
   local shell = accounts.loginCommand(p.accounts, rt.account, command, intro, noctalia.tr("accounts.login_done"))
   if not noctalia.runInTerminal(shell) then
@@ -501,7 +523,7 @@ end
 
 local function renameAccount(rt: Runtime, label: string)
   label = noctalia.string.trim(label):sub(1, LABEL_MAX)
-  if not accounts.rename(accountRegistry, rt.account, label) then
+  if not accounts.rename(accountRegistry, rt.account, label, rt.identity and rt.identity.id) then
     return
   end
   accounts.save(accountRegistry)

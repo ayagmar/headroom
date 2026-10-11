@@ -16,8 +16,10 @@
 -- Providers without a config folder (Antigravity) have just the default.
 --
 -- The registry (<data dir>/accounts.json) holds the added accounts' names,
--- the names given to the default and found accounts, and the hidden folders.
--- Only the service writes it.
+-- the names given to accounts, and the hidden folders. A name given once the
+-- folder's sign-in is known belongs to that sign-in, so it follows the account
+-- when a folder signs in to another one (`/login`); before that, it belongs to
+-- the folder. Only the service writes it.
 
 local fs = require("./fs.luau")
 
@@ -36,6 +38,7 @@ export type Registry = {
   version: number,
   added: { [string]: { { id: string, label: string } } },
   labels: { [string]: { [string]: string } }, -- provider -> folder -> name (default and found accounts)
+  names: { [string]: { [string]: string } }, -- provider -> identity id -> name
   hidden: { [string]: { [string]: boolean } },
 }
 
@@ -54,7 +57,7 @@ function M.addedHome(providerId: string, id: string): string?
 end
 
 function M.load(ctx): Registry
-  local registry = { version = VERSION, added = {}, labels = {}, hidden = {} }
+  local registry = { version = VERSION, added = {}, labels = {}, names = {}, hidden = {} }
   local path = registryPath()
   local doc = if path and ctx.fileExists(path) then ctx.readJson(path) else nil
   if type(doc) ~= "table" or doc.version ~= VERSION then
@@ -74,14 +77,16 @@ function M.load(ctx): Registry
       registry.hidden[providerId] = homes
     end
   end
-  for providerId, names in (if type(doc.labels) == "table" then doc.labels else {}) do
-    local valid = {}
-    for home, label in (if type(names) == "table" then names else {}) do
-      if type(home) == "string" and type(label) == "string" then
-        valid[home] = label
+  for _, field in { "labels", "names" } do
+    for providerId, map in (if type(doc[field]) == "table" then doc[field] else {}) do
+      local valid = {}
+      for key, label in (if type(map) == "table" then map else {}) do
+        if type(key) == "string" and type(label) == "string" then
+          valid[key] = label
+        end
       end
+      registry[field][providerId] = valid
     end
-    registry.labels[providerId] = valid
   end
   return registry
 end
@@ -159,9 +164,20 @@ function M.add(registry: Registry, providerId: string, id: string, label: string
   table.insert(registry.added[providerId], { id = id, label = label })
 end
 
--- Names an account. An empty name gives the default and found accounts their
--- usual name back; added accounts always keep one.
-function M.rename(registry: Registry, account: Account, label: string): boolean
+-- Names an account. With `identityId` (the folder's sign-in is known) the
+-- name goes to that sign-in. An empty name gives the usual name back; added
+-- accounts always keep a folder name.
+function M.rename(registry: Registry, account: Account, label: string, identityId: string?): boolean
+  if identityId then
+    registry.names[account.provider] = registry.names[account.provider] or {}
+    registry.names[account.provider][identityId] = if label == "" then nil else label
+    if label == "" and account.kind ~= "added" and account.home and registry.labels[account.provider] then
+      registry.labels[account.provider][account.home] = nil
+    end
+    if label == "" or account.kind ~= "added" then
+      return true
+    end
+  end
   if account.kind == "added" then
     if label == "" then
       return false

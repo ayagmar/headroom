@@ -314,6 +314,57 @@ t.group("accounts", function()
     t.eq(#claudeView(restarted).accounts, 1, "still hidden after a restart")
   end)
 
+  t.test("signing the default in to an account already shown, from the CLI itself, is noticed", function()
+    local ADDED_WORK = "/data/accounts/claude/work"
+    local host = env.host()
+    host.commands["claude"] = true
+    env.claudeCreds(host)
+    env.claudeProfile(host, "me")
+    serveByToken(host, { ["claude-token"] = 38, ["side-token"] = 12 })
+    local svc = env.start(host, "service.luau")
+    host.globals.noctalia.state.set("command", { action = "add", provider = "claude", label = "Work" })
+    env.claudeCreds(host, { accessToken = "side-token" }, ADDED_WORK)
+    env.claudeProfile(host, "work", ADDED_WORK)
+    host.clock += 5
+    svc.call("update")
+    t.eq(claudeView(host).accounts[2].duplicateOf, nil)
+
+    -- `/login` in Claude Code, outside Headroom, as the Work account
+    env.claudeCreds(host, { accessToken = "side-token" })
+    env.claudeProfile(host, "work")
+    host.clock += 30
+    svc.call("update")
+    local view = claudeView(host)
+    t.eq(sessionOf(view.accounts[1]), 12, "the default shows the account it is signed in to now")
+    t.eq(view.accounts[1].label, "Work", "and is named after it")
+    t.eq(view.accounts[2].duplicateOf, "Work")
+  end)
+
+  t.test("a name given to a signed-in account follows it to another folder", function()
+    local host = env.host()
+    env.claudeCreds(host)
+    env.claudeProfile(host, "me")
+    env.claudeCreds(host, { accessToken = "work-token" }, WORK)
+    env.claudeProfile(host, "work", WORK)
+    serveByToken(host, { ["claude-token"] = 38, ["work-token"] = 88 })
+    local svc = env.start(host, "service.luau")
+    local state = host.globals.noctalia.state
+    state.set("command", { action = "rename", key = "claude", label = "Personal" })
+    state.set("command", { action = "rename", key = claudeView(host).accounts[2].key, label = "Job" })
+
+    -- `/login` in the default folder as the Job account, then back
+    env.claudeCreds(host, { accessToken = "work-token" })
+    env.claudeProfile(host, "work")
+    host.clock += 30
+    svc.call("update")
+    t.eq(claudeView(host).accounts[1].label, "Job")
+    env.claudeCreds(host)
+    env.claudeProfile(host, "me")
+    host.clock += 30
+    svc.call("update")
+    t.eq(claudeView(host).accounts[1].label, "Personal")
+  end)
+
   t.test("an added account signed in to an account already shown is flagged, not fetched twice", function()
     local host = env.host()
     host.commands["claude"] = true

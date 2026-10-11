@@ -100,6 +100,11 @@ folder.
   private window. The account appears as soon as the sign-in finishes.
 - **Use an account.** The terminal button copies the command that starts the CLI as that account, such as
   `CLAUDE_CONFIG_DIR='…' claude`.
+- **Rename an account.** Click the pencil next to its name. The name belongs to the account, not the folder: if you
+  sign a folder in to another account (`/login` in Claude Code), the card takes that account's name, and an account
+  you added is named for the account it signed in to. Leave the name empty to get the usual one back.
+- **Same account twice.** If two folders are signed in to the same account, the later one says so instead of showing
+  the same limits twice.
 - **Sign in again.** An account whose sign-in expired or was rejected has a **Sign in** button that reopens the CLI's
   sign-in for its folder. A provider that isn't signed in at all has one too.
 - **Remove an account.** Click the trash button, then **Remove?** to confirm. Headroom deletes the folder it made for
@@ -172,7 +177,7 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
   whoever runs the CLI in that folder. When you add an account, the CLI writes its sign-in, not Headroom.
 - **Files written.** All in `~/.local/state/noctalia/plugins/data/ayagmar/headroom/`:
   - `cache.json`: the last usage numbers, so the bar has data right after login. No credentials.
-  - `accounts.json`: the names of accounts you added and the found folders you hid. No credentials.
+  - `accounts.json`: the names you gave accounts, the accounts you added and the found folders you hid. No credentials.
   - `accounts/<provider>/<name>/`: one empty folder per added account, which the CLI then signs in to.
   - `icons/` and `rings/`: small SVGs tinted for your theme.
 - **Processes.** Each runs from an argument list, never through a shell, except the sign-in noted below:

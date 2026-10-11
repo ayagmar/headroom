@@ -11,7 +11,7 @@
 
 id = "ayagmar/headroom"
 name = "Headroom"
-version = "0.2.0"
+version = "0.2.1"
 plugin_api = 32
 author = "ayagmar"
 license = "MIT"
