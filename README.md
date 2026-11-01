@@ -164,8 +164,9 @@ noctalia msg plugin ayagmar/headroom:poller all refresh
 - **Network.** Only the `poller` service makes requests: one per signed-in account every `refresh_minutes`.
   - Claude: `GET https://api.anthropic.com/api/oauth/usage`
   - Codex: `GET https://chatgpt.com/backend-api/wham/usage`
-  - Antigravity: `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`, and
-    `:loadCodeAssist` for the plan name at most every 6 hours
+  - Antigravity: `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`,
+    `:retrieveUserQuota` when the summary stops listing the Gemini group, and `:loadCodeAssist` for the plan name
+    at most every 6 hours
 
   These are the endpoints each vendor's own tools use. Headroom sends `headroom-noctalia/<version>` as its User-Agent,
   except to Antigravity, whose endpoint only answers `antigravity`. Offline mode (`shell.offline_mode`) is respected.

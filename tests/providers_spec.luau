@@ -186,10 +186,26 @@ t.group("antigravity", function()
       end
       return nil
     end
-    env.serve(host, {
-      ["loadCodeAssist"] = '{"paidTier":{"name":"Google AI Pro"}}',
-      ["retrieveUserQuotaSummary"] = opts.quota or env.fixture("antigravity_quota.json"),
-    })
+    local summary = opts.quota or env.fixture("antigravity_quota.json")
+    local models = opts.models
+    local function reply(response)
+      if type(response) == "string" then
+        return { ok = true, status = 200, body = response }
+      end
+      return response
+    end
+    host.httpHandler = function(req)
+      -- The summary and the per-model endpoint share a prefix, so match the
+      -- longer one first.
+      if req.url:find("retrieveUserQuotaSummary", 1, true) then
+        return reply(summary)
+      elseif req.url:find("retrieveUserQuota", 1, true) then
+        return if models ~= nil then reply(models) else { ok = true, status = 404, body = "" }
+      elseif req.url:find("loadCodeAssist", 1, true) then
+        return { ok = true, status = 200, body = '{"paidTier":{"name":"Google AI Pro"}}' }
+      end
+      return { ok = true, status = 404, body = "" }
+    end
     return host, p, ctx
   end
 
@@ -263,6 +279,54 @@ t.group("antigravity", function()
     t.eq(select(2, fetch(p, ctx)).code, "not_configured")
     fetch(p, ctx)
     t.eq(#commands(host), 1)
+  end)
+
+  t.test("summary without the Gemini group -> rebuilt from the per-model endpoint", function()
+    local host, p, ctx = setup({
+      keyring = session(FRESH),
+      quota = env.fixture("antigravity_quota_3p_only.json"),
+      models = env.fixture("antigravity_models_quota.json"),
+    })
+    local snap, err = fetch(p, ctx)
+    t.eq(err, nil)
+    t.eq(#snap.windows, 3)
+    local w = byId(snap.windows)
+    t.eq(w["gemini-5h"].label, "Gemini · Session")
+    t.near(w["gemini-5h"].usedPercent, 20.65579, 1e-4)
+    t.eq(w["gemini-5h"].periodSeconds, 5 * 3600)
+    t.eq(snap.windows[1].id, "gemini-5h", "the group comes first, as the summary used to order it")
+    t.eq(host.requests[2].url:find("Summary", 1, true), nil, "second call is the per-model endpoint")
+  end)
+
+  t.test("a summary that still lists Gemini costs no extra request", function()
+    local host, p, ctx = setup({ keyring = session(FRESH) })
+    local snap = fetch(p, ctx)
+    t.eq(#snap.windows, 4)
+    t.eq(#host.requests, 2) -- the summary, then the plan
+  end)
+
+  t.test("the rebuilt group takes its window from the reset time", function()
+    local _, p, ctx = env.provider("antigravity")
+    local models = { buckets = {
+      { modelId = "gemini-3-flash", remainingFraction = 0.5, resetTime = "2026-09-27T12:00:00Z" },
+      { modelId = "gemini-2.5-pro", remainingFraction = 0.5, resetTime = "2026-09-27T12:00:00Z" },
+      { modelId = "claude-sonnet-4-6", remainingFraction = 0.1, resetTime = "2026-09-21T18:00:00Z" },
+    } }
+    local snap = p.parse({ groups = { { displayName = "Claude and GPT models", buckets = {} } } }, ctx, models)
+    t.eq(#snap.windows, 1)
+    t.eq(snap.windows[1].label, "Gemini · Weekly")
+    t.eq(snap.windows[1].usedPercent, 50)
+  end)
+
+  t.test("an unusable per-model response leaves the summary alone", function()
+    local _, p, ctx = env.provider("antigravity")
+    local snap = p.parse({
+      groups = { { displayName = "Claude and GPT models", buckets = {
+        { bucketId = "3p-5h", window = "5h", remainingFraction = 1, resetTime = FRESH },
+      } } },
+    }, ctx, { buckets = {} })
+    t.eq(#snap.windows, 1)
+    t.eq(snap.windows[1].id, "3p-5h")
   end)
 
   t.test("SUBSCRIPTION_REQUIRED is a plan problem, not a sign-in problem", function()

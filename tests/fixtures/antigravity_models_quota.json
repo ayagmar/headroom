@@ -1,0 +1,56 @@
+{
+    "buckets": [
+        {
+            "tokenType": "WTUS",
+            "modelId": "chat_20706",
+            "remainingFraction": 1
+        },
+        {
+            "resetTime": "2026-09-21T18:33:55Z",
+            "tokenType": "WTUS",
+            "modelId": "claude-opus-4-6-thinking",
+            "remainingFraction": 0.498406
+        },
+        {
+            "resetTime": "2026-09-27T11:34:40Z",
+            "tokenType": "WTUS",
+            "modelId": "claude-sonnet-4-6",
+            "remainingFraction": 0.498406
+        },
+        {
+            "resetTime": "2026-09-21T18:33:55Z",
+            "tokenType": "WTUS",
+            "modelId": "gemini-2.5-flash",
+            "remainingFraction": 0.7934421
+        },
+        {
+            "resetTime": "2026-09-21T18:33:55Z",
+            "tokenType": "WTUS",
+            "modelId": "gemini-2.5-pro",
+            "remainingFraction": 0.7934421
+        },
+        {
+            "resetTime": "2026-09-21T18:33:55Z",
+            "tokenType": "WTUS",
+            "modelId": "gemini-3-flash",
+            "remainingFraction": 0.7934421
+        },
+        {
+            "resetTime": "2026-09-21T18:33:55Z",
+            "tokenType": "WTUS",
+            "modelId": "gemini-3.8-flash-tiered",
+            "remainingFraction": 0.7934421
+        },
+        {
+            "resetTime": "2026-09-27T11:34:40Z",
+            "tokenType": "WTUS",
+            "modelId": "gpt-oss-120b-medium",
+            "remainingFraction": 0.498406
+        },
+        {
+            "tokenType": "WTUS",
+            "modelId": "tab_flash_lite_preview",
+            "remainingFraction": 1
+        }
+    ]
+}

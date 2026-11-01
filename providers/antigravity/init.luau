@@ -13,10 +13,12 @@
 -- minutes, so a dead session does not spawn agy on every refresh).
 --
 -- Endpoints: POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary,
--- and :loadCodeAssist for the plan name (at most every 6 hours). Undocumented. It only answers clients that
--- identify as Antigravity, so this adapter's User-Agent is "antigravity"
--- rather than Headroom's own. Plans without Antigravity quota get 403
--- SUBSCRIPTION_REQUIRED, reported as no_plan rather than as a sign-in problem.
+-- :retrieveUserQuota for the Gemini group once the summary stopped reporting it
+-- (see withGemini), and :loadCodeAssist for the plan name (at most every 6 hours).
+-- Undocumented. They only answer clients that identify as Antigravity, so this
+-- adapter's User-Agent is "antigravity" rather than Headroom's own. Plans
+-- without Antigravity quota get 403 SUBSCRIPTION_REQUIRED, reported as no_plan
+-- rather than as a sign-in problem.
 
 local provider = require("../../lib/provider.luau")
 local model = require("../../lib/model.luau")
@@ -31,6 +33,10 @@ local CLIENT_METADATA = '{"metadata":{"ideType":"ANTIGRAVITY","platform":"PLATFO
 -- The plan changes rarely; ask for it at most this often.
 local PLAN_TTL = 6 * 3600
 local QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
+-- Google dropped the Gemini group from the summary; this per-model endpoint still
+-- carries it, one bucket per Gemini model over the same pool. Asked for only when
+-- the summary no longer lists the group.
+local MODELS_QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
 local SESSION_SECONDS = model.SESSION_SECONDS
 local WEEK_SECONDS = model.WEEK_SECONDS
 
@@ -131,9 +137,82 @@ local function groupLabel(name: any): string
   return name
 end
 
--- Exposed for tests: quota summary -> Snapshot. The API reports what is left;
--- every other provider reports what is spent, so it is inverted here.
-local function parse(data, ctx): (model.Snapshot?, model.ProviderError?)
+-- Whether the summary still reports a group by name. Google removed the Gemini
+-- one in late October 2026; those names are the only structure we rely on.
+local function hasGroup(groups: { any }, name: string): boolean
+  for _, group in groups do
+    if type(group) == "table" and type(group.displayName) == "string"
+      and group.displayName:find(name, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+-- Rebuilds the Gemini group from the per-model document. Every Gemini model in
+-- it reports the same fraction over the same pool and the same reset, so one
+-- bucket per distinct reset is the window the group used to carry. A reset more
+-- than three days out is the weekly window, anything sooner the five-hour one.
+-- Returns the summary untouched when it still has the group, or when nothing
+-- usable came back: the card must never lose a window to this fallback.
+local function withGemini(data, models, ctx)
+  local body = if type(data.response) == "table" then data.response else data
+  local groups = body.groups
+  if type(groups) ~= "table" or type(models) ~= "table" or hasGroup(groups, "Gemini") then
+    return data
+  end
+  local buckets = {}
+  local seenReset = {}
+  for _, bucket in (if type(models.buckets) == "table" then models.buckets else {}) do
+    local modelId = if type(bucket.modelId) == "string" then bucket.modelId else ""
+    local remaining = tonumber(bucket.remainingFraction)
+    local reset = bucket.resetTime
+    if modelId:sub(1, 6) == "gemini" and remaining ~= nil and remaining >= 0 and remaining <= 1
+      and type(reset) == "string" and not seenReset[reset] then
+      local resetsAt = time.parseIso8601(reset)
+      if resetsAt ~= nil then
+        seenReset[reset] = true
+        local weekly = resetsAt - ctx.now() > 3 * 86400
+        table.insert(buckets, {
+          bucketId = if weekly then "gemini-weekly" else "gemini-5h",
+          window = if weekly then "weekly" else "5h",
+          remainingFraction = remaining,
+          resetTime = reset,
+        })
+      end
+    end
+  end
+  if #buckets == 0 then
+    return data
+  end
+  local merged = { { displayName = "Gemini models", buckets = buckets } }
+  for _, group in groups do
+    table.insert(merged, group)
+  end
+  -- Copy the envelope rather than editing the caller's document.
+  local out = {}
+  for key, value in data do
+    out[key] = value
+  end
+  if body == data then
+    out.groups = merged
+  else
+    local response = {}
+    for key, value in body do
+      response[key] = value
+    end
+    response.groups = merged
+    out.response = response
+  end
+  return out
+end
+
+-- Exposed for tests: quota summary -> Snapshot. `models` is the per-model
+-- document, used only when the summary has dropped the Gemini group. The API
+-- reports what is left; every other provider reports what is spent, so it is
+-- inverted here.
+local function parse(data, ctx, models): (model.Snapshot?, model.ProviderError?)
+  data = withGemini(data, models, ctx)
   local body = if type(data.response) == "table" then data.response else data
   local groups = body.groups
   if type(groups) ~= "table" then
@@ -209,12 +288,8 @@ local function query(ctx, session: Session, done)
     ["Authorization"] = `Bearer {session.accessToken}`,
     ["User-Agent"] = "antigravity", -- required by the endpoint; see header comment
   }
-  ctx.postJson(QUOTA_URL, headers, "{}", function(data, err)
-    if err then
-      done(nil, err)
-      return
-    end
-    local snapshot, parseErr = parse(data, ctx)
+  local function finish(data, models)
+    local snapshot, parseErr = parse(data, ctx, models)
     if snapshot == nil then
       done(nil, parseErr)
       return
@@ -222,6 +297,22 @@ local function query(ctx, session: Session, done)
     withPlan(ctx, headers, function(plan)
       snapshot.plan = plan
       done(snapshot, nil)
+    end)
+  end
+
+  ctx.postJson(QUOTA_URL, headers, "{}", function(data, err)
+    if err then
+      done(nil, err)
+      return
+    end
+    local body = if type(data.response) == "table" then data.response else data
+    if type(body.groups) ~= "table" or hasGroup(body.groups, "Gemini") then
+      finish(data, nil) -- the summary still carries every group: one request is enough
+      return
+    end
+    -- Best effort: a failure leaves parse() with the summary alone.
+    ctx.postJson(MODELS_QUOTA_URL, headers, "{}", function(models)
+      finish(data, models)
     end)
   end, classify)
 end
