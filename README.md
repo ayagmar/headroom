@@ -1,5 +1,10 @@
 # Headroom
 
+> [!NOTE]
+> This repository is archived. Headroom now lives in
+> [noctalia-dev/community-plugins](https://github.com/noctalia-dev/community-plugins/tree/main/headroom), which is
+> where Noctalia installs it from. Open issues and pull requests there.
+
 Headroom shows how much of your Claude, Codex and Antigravity plan limits you have left, right in the Noctalia bar.
 Click it for every usage window, when each one resets, and where you'll be by then at your current rate.
 
